@@ -557,9 +557,9 @@ body.no-bg {
   }
 
   body {
-    background-attachment: scroll;
+    background-attachment: fixed;
     background-repeat: no-repeat;
-    background-size: contain;
+    background-size: cover;
     background-position: center;
   }
 
@@ -785,9 +785,17 @@ body.no-bg {
 }
 
 @media (max-width: 900px) {
+  html,
+  body {
+    min-height: 100dvh;
+    min-height: 100svh;
+  }
+
   body {
     background-attachment: scroll;
-    background-position: 78% 18%;
+    background-repeat: no-repeat;
+    background-size: auto 100%;
+    background-position: 72% center;
   }
 
   .settings {
@@ -801,7 +809,7 @@ body.no-bg {
   .stage {
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
+    justify-content: flex-start;
     min-height: 100dvh;
     min-height: 100svh;
   }
@@ -843,7 +851,7 @@ body.no-bg {
   }
 
   .ask {
-    padding: 0.45rem 0.75rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    padding: calc(0.45rem + env(safe-area-inset-top, 0px)) 0.75rem 0.7rem;
   }
 
   .card {
@@ -913,7 +921,7 @@ body.no-bg {
 @keyframes sheet-in {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(-12px);
   }
   to {
     opacity: 1;
