@@ -1,0 +1,25 @@
+# Vercel / Next.js (web/)
+web/node_modules/
+web/.next/
+web/out/
+web/.vercel/
+web/*.tsbuildinfo
+
+node_modules/
+.next/
+out/
+.vercel/
+
+.env
+.env.*
+!.env.example
+.env*.local
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+.DS_Store
+Thumbs.db
+desktop.ini
