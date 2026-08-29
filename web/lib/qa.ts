@@ -311,7 +311,7 @@ function stepAlreadyDecided(
 export function frameKindLogLine(answers: QaAnswers, current: StepId): string {
   const kind = answers.frameKind ?? "";
   if (!kind) return "";
-  const bits = [kind];
+  const bits: string[] = [kind];
   if (
     isSheetKind(kind) &&
     answers.sheetFace &&
