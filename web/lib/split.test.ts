@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { splitOversize } from "./split";
-import { USABLE_48, fitsSomeStock } from "./stock";
+import { splitByPanelWidth, splitOversize } from "./split";
+import { USABLE_36, USABLE_48, fitsSomeStock } from "./stock";
 import type { Member } from "./model";
 
 function piece(length: number, width: number, extra?: Partial<Member>): Member {
@@ -63,4 +63,18 @@ test("長い部材は載るまで繰り返す", () => {
   for (const part of parts) {
     assert.ok(fitsSomeStock(part.length, part.width, true));
   }
+});
+
+test("横幅が広い面は巾だけ3×6に分け、縦は切らない", () => {
+  const parts = splitByPanelWidth([piece(1800, 1200)], 1200, 1800);
+  assert.equal(parts.length, 2);
+  assert.ok(parts.every((part) => part.length === 1800));
+  assert.equal(
+    parts.reduce((sum, part) => sum + part.width, 0),
+    1200,
+  );
+  assert.ok(parts.every((part) => part.width <= USABLE_36.width));
+
+  const tall = splitByPanelWidth([piece(2000, 1200)], 1200, 2000);
+  assert.ok(tall.every((part) => part.length === 2000));
 });

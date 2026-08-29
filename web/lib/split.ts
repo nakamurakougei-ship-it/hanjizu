@@ -1,5 +1,10 @@
 import type { Member } from "./model";
-import { USABLE_48, fitsSomeStock } from "./stock";
+import {
+  USABLE_36,
+  USABLE_48,
+  fitsSomeStock,
+  type SheetSize,
+} from "./stock";
 
 const EPS = 0.01;
 const MAX_DEPTH = 16;
@@ -101,8 +106,7 @@ function tJoint(src: Member, sheetL: number, sheetW: number): Member[] {
   return out;
 }
 
-function splitOnce(src: Member): Member[] {
-  const sheet = USABLE_48;
+function splitOnce(src: Member, sheet: SheetSize): Member[] {
   const overL = src.length > sheet.length + EPS;
   const overW = src.width > sheet.width + EPS;
   if (src.joint === "straight") {
@@ -116,17 +120,43 @@ function splitOnce(src: Member): Member[] {
   return [src];
 }
 
-function splitOne(src: Member, depth: number): Member[] {
-  if (fitsSomeStock(src.length, src.width, src.canRotate)) return [src];
+function splitOne(
+  src: Member,
+  sheet: SheetSize,
+  done: (item: Member) => boolean,
+  depth: number,
+): Member[] {
+  if (done(src)) return [src];
   if (depth >= MAX_DEPTH) return [src];
-  const parts = splitOnce(src);
+  const parts = splitOnce(src, sheet);
   if (parts.length === 1 && parts[0].length === src.length && parts[0].width === src.width) {
     return [src];
   }
-  return parts.flatMap((part) => splitOne(part, depth + 1));
+  return parts.flatMap((part) => splitOne(part, sheet, done, depth + 1));
 }
 
 /** 3×6 にも 4×8 にも載らない部材だけ分割する。載るものは寸法のまま残す。 */
 export function splitOversize(members: Member[]): Member[] {
-  return members.flatMap((item) => splitOne(item, 0));
+  return members.flatMap((item) =>
+    splitOne(
+      item,
+      USABLE_48,
+      (part) => fitsSomeStock(part.length, part.width, part.canRotate),
+      0,
+    ),
+  );
+}
+
+/** 横幅が 3×6 の巾を超えるとき、巾方向だけ分割する。縦長超えの分割は別枝。 */
+export function splitByPanelWidth(
+  members: Member[],
+  panelWidth: number,
+  panelHeight: number,
+  maxWidth: number = USABLE_36.width,
+): Member[] {
+  if (panelWidth <= maxWidth + EPS) return members;
+  const widthIsLongSide = panelWidth >= panelHeight;
+  return members.flatMap((src) =>
+    widthIsLongSide ? cutAlongLength(src, maxWidth) : cutAlongWidth(src, maxWidth),
+  );
 }

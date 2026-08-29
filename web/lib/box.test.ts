@@ -118,7 +118,7 @@ test("パネルは天断面と当たりを持たず、寸法へ進む", () => {
 
   assert.equal(
     nextStep("product", { ...defaultAnswers(), product: "パネル" }),
-    "size",
+    "panelName",
   );
   assert.equal(
     nextStep("product", { ...defaultAnswers(), product: "箱" }),

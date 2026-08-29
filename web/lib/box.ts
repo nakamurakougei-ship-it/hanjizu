@@ -10,7 +10,9 @@ import {
   type Face,
 } from "./model";
 import { splitOversize } from "./split";
-import { kogaraSei, panelMembers, PANEL_FACE_T_MM } from "./panel";
+import { panelSei, PANEL_FACE_T_MM } from "./panel";
+import { membersFromPanel } from "./job";
+import { isSheetKind } from "./catalog";
 import {
   FINISH_THICK_MM,
   YOTORI_MM,
@@ -51,8 +53,13 @@ export function boxFromAnswers(answers: QaAnswers): Product {
   const t = answers.lumberT;
 
   if (answers.product === "パネル") {
-    const sei = kogaraSei(answers.boneUse ?? "成使い");
-    const skins = answers.sides === "両面" ? 2 : 1;
+    const sei = panelSei(answers);
+    const skins =
+      isSheetKind(answers.frameKind) && answers.sheetUse !== "割き"
+        ? 0
+        : answers.sides === "両面"
+          ? 2
+          : 1;
     const thick = sei + PANEL_FACE_T_MM * skins;
     const box = emptyBox("パネル", answers.width, answers.height, thick);
     box.faces.top = {
@@ -362,7 +369,7 @@ export function membersFromProduct(product: Product): Member[] {
 }
 
 export function membersFromAnswers(answers: QaAnswers): Member[] {
-  if (answers.product === "パネル") return panelMembers(answers);
+  if (answers.product === "パネル") return membersFromPanel(answers);
   return splitOversize(membersFromProduct(boxFromAnswers(answers)));
 }
 

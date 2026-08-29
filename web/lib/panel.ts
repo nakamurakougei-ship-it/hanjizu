@@ -1,31 +1,139 @@
+import {
+  KOGARA,
+  TARUKI,
+  isNamedTimberKind,
+  isSheetKind,
+  isStickKind,
+  stickFace,
+  stickName,
+  stickSei,
+  timberOf,
+  type StickKind,
+} from "./catalog";
 import type { Member } from "./model";
-import type { QaAnswers } from "./qa";
+import { asksFaceStock, type QaAnswers } from "./qa";
+import { splitByPanelWidth } from "./split";
 
-/** 小割 20×30 */
-export const KOGARA = { short: 20, long: 30 };
-/** 垂木 30×40 */
-export const TARUKI = { short: 30, long: 40 };
-/** 半生材の横桟（負け側）を計算より短くする */
+export { KOGARA, TARUKI };
+
+/** 横桟の余裕。寸面通りなら 0。余裕なら入力ミリ（未入力は 1） */
+export function railShortMm(answers: QaAnswers): number {
+  if (answers.railFit !== "余裕") return 0;
+  const n = answers.railAllow;
+  if (n == null || !Number.isFinite(n) || n < 0) return 1;
+  return n;
+}
+
+/** 半生材の横桟に使う余裕の目安（質問の初期値） */
 export const HANSEI_SHORT_MM = 1;
-/** 中残の最大間隔 */
-export const MAX_NAKA_NOKORI_MM = 450;
+/** 横桟ピッチの初期値。仕上がり高さ ÷ ピッチの端数切捨て − 1 が中の本数 */
+export const DEFAULT_RAIL_PITCH_MM = 450;
 export const PANEL_FACE_T_MM = 3;
 
 export function kogaraSei(use: "成使い" | "横使い"): number {
-  return use === "成使い" ? KOGARA.long : KOGARA.short;
+  return stickSei("小割", use);
 }
 
 export function kogaraFace(use: "成使い" | "横使い"): number {
-  return use === "成使い" ? KOGARA.short : KOGARA.long;
+  return stickFace("小割", use);
 }
 
-export function nakaCount(inner: number, faceW: number, maxGap: number): number {
-  if (inner <= 0) return 0;
-  for (let n = 0; n < 80; n += 1) {
-    const clear = (inner - n * faceW) / (n + 1);
-    if (clear <= maxGap) return n;
+export function railPitchMm(answers: QaAnswers): number {
+  const n = answers.railPitch;
+  if (n == null || !Number.isFinite(n) || n <= 0) return DEFAULT_RAIL_PITCH_MM;
+  return n;
+}
+
+/** 上下を除く中の横桟本数。端数切捨て。例: 1800÷450→3本、1800÷300→5本 */
+export function midRailCount(height: number, pitch: number): number {
+  if (height <= 0 || pitch <= 0) return 0;
+  return Math.max(0, Math.floor(height / pitch) - 1);
+}
+
+export function extraStileColumns(answers: QaAnswers): number {
+  if (!asksFaceStock(answers) && answers.stileExtra !== "入れる") return 0;
+  const n = Math.floor(Number(answers.stileExtraN));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** 横桟勝ちの縦残1列分。高さ − 横桟幅×本数 を隙間数で割る */
+export function extraStileSegLength(height: number, railFaces: number[]): number {
+  if (railFaces.length === 0) return height;
+  const remaining = height - railFaces.reduce((sum, face) => sum + face, 0);
+  const gaps = Math.max(1, railFaces.length - 1);
+  return Math.max(0, remaining / gaps);
+}
+
+function railFaceList(top: number, mid: number, bottom: number, midCount: number): number[] {
+  return [top, ...Array.from({ length: midCount }, () => mid), bottom];
+}
+
+function extraStileSpec(
+  answers: QaAnswers,
+  frame: { sei: number; fw: number; materialName: string },
+): { width: number; thickness: number; materialName: string } {
+  if (answers.frameKind === "小割" || answers.frameKind == null) {
+    return {
+      width: TARUKI.long,
+      thickness: frame.sei,
+      materialName: stickName("垂木"),
+    };
   }
-  return 80;
+  return {
+    width: frame.fw,
+    thickness: frame.sei,
+    materialName: frame.materialName,
+  };
+}
+
+function pushExtraStiles(
+  out: Member[],
+  answers: QaAnswers,
+  opts: {
+    sei: number;
+    fw: number;
+    materialName: string;
+    railFaces: number[];
+    height: number;
+  },
+): void {
+  const columns = extraStileColumns(answers);
+  if (columns <= 0) return;
+  const gaps = Math.max(1, opts.railFaces.length - 1);
+  const spec = extraStileSpec(answers, {
+    sei: opts.sei,
+    fw: opts.fw,
+    materialName: opts.materialName,
+  });
+  out.push(
+    stick({
+      id: "panel-vstile",
+      name: "縦残",
+      length: extraStileSegLength(opts.height, opts.railFaces),
+      width: spec.width,
+      thickness: spec.thickness,
+      materialName: spec.materialName,
+      qty: columns * gaps,
+    }),
+  );
+}
+
+function pushFaces(
+  out: Member[],
+  answers: QaAnswers,
+  height: number,
+  width: number,
+): void {
+  const faceMat = answers.faceMaterial ?? "ラワンベニヤ";
+  const faces = [skin("panel-face", "面材 表", height, width, faceMat)];
+  if (answers.sides === "両面") {
+    faces.push(skin("panel-face-back", "面材 裏", height, width, faceMat));
+  }
+  out.push(
+    ...(answers.faceStock === "3×6"
+      ? splitByPanelWidth(faces, width, height)
+      : faces),
+  );
 }
 
 function stick(input: {
@@ -35,6 +143,7 @@ function stick(input: {
   width: number;
   thickness: number;
   materialName: string;
+  qty?: number;
 }): Member {
   const thick = input.thickness;
   const keyThick = Number.isInteger(thick) ? String(thick) : thick.toFixed(1);
@@ -49,10 +158,36 @@ function stick(input: {
     thickness: thick,
     construction: "flush",
     materialKey: `${input.materialName} ${keyThick}`,
-    qty: 1,
+    qty: input.qty ?? 1,
     joint: "straight",
     canRotate: true,
   };
+}
+
+function midRailLength(
+  tateWin: boolean,
+  width: number,
+  stileFace: number,
+  short: number,
+): number {
+  return tateWin ? width - 2 * stileFace - short : width - short;
+}
+
+function pushMidRails(
+  out: Member[],
+  answers: QaAnswers,
+  spec: { length: number; width: number; thickness: number; materialName: string },
+): void {
+  const n = midRailCount(answers.height, railPitchMm(answers));
+  for (let i = 0; i < n; i += 1) {
+    out.push(
+      stick({
+        id: `panel-naka-${i}`,
+        name: `中桟${i + 1}`,
+        ...spec,
+      }),
+    );
+  }
 }
 
 function skin(id: string, name: string, length: number, width: number, material: string): Member {
@@ -73,19 +208,44 @@ function skin(id: string, name: string, length: number, width: number, material:
   };
 }
 
-export function panelMembers(answers: QaAnswers): Member[] {
+function boardPanel(answers: QaAnswers): Member[] {
   const W = answers.width;
   const H = answers.height;
-  const use = answers.boneUse ?? "成使い";
-  const sei = kogaraSei(use);
-  const fw = kogaraFace(use);
-  const railsTaruki = use === "成使い" && answers.railKind === "上下垂木";
-  const railFace = railsTaruki ? TARUKI.long : fw;
-  const railName = railsTaruki ? "垂木 30×40" : "小割 20×30";
-  const kogaraName = "小割 20×30";
+  const t = answers.frameThickness ?? 15;
+  const material =
+    answers.frameMaterial ??
+    (answers.frameKind === "ベニヤ" ? "ラワンベニヤ" : "ラワンランバー");
+  const keyThick = Number.isInteger(t) ? String(t) : String(t);
+  const core: Member = {
+    id: "panel-core",
+    name: "芯",
+    boxId: "パネル",
+    faceId: "top",
+    role: "core",
+    length: Math.max(H, W),
+    width: Math.min(H, W),
+    thickness: t,
+    construction: "thick",
+    materialKey: `${material} ${keyThick}`,
+    qty: 1,
+    joint: "straight",
+    canRotate: true,
+  };
+  return answers.faceStock === "3×6"
+    ? splitByPanelWidth([core], W, H)
+    : [core];
+}
+
+function frameSticks(
+  answers: QaAnswers,
+  dims: { sei: number; fw: number; materialName: string; withFace: boolean },
+): Member[] {
+  const W = answers.width;
+  const H = answers.height;
+  const { sei, fw, materialName } = dims;
   const tateWin = answers.frameWin !== "横勝ち";
-  const innerW = W - 2 * fw;
-  const naka = nakaCount(innerW, fw, MAX_NAKA_NOKORI_MM);
+  const short = railShortMm(answers);
+  const railLen = midRailLength(tateWin, W, fw, short);
   const out: Member[] = [];
 
   if (tateWin) {
@@ -96,7 +256,7 @@ export function panelMembers(answers: QaAnswers): Member[] {
         length: H,
         width: fw,
         thickness: sei,
-        materialName: kogaraName,
+        materialName,
       }),
       stick({
         id: "panel-stile-r",
@@ -104,12 +264,129 @@ export function panelMembers(answers: QaAnswers): Member[] {
         length: H,
         width: fw,
         thickness: sei,
-        materialName: kogaraName,
+        materialName,
       }),
       stick({
         id: "panel-rail-t",
         name: "上桟",
-        length: W - 2 * fw - HANSEI_SHORT_MM,
+        length: railLen,
+        width: fw,
+        thickness: sei,
+        materialName,
+      }),
+      stick({
+        id: "panel-rail-b",
+        name: "下桟",
+        length: railLen,
+        width: fw,
+        thickness: sei,
+        materialName,
+      }),
+    );
+  } else {
+    out.push(
+      stick({
+        id: "panel-rail-t",
+        name: "上桟",
+        length: railLen,
+        width: fw,
+        thickness: sei,
+        materialName,
+      }),
+      stick({
+        id: "panel-rail-b",
+        name: "下桟",
+        length: railLen,
+        width: fw,
+        thickness: sei,
+        materialName,
+      }),
+      stick({
+        id: "panel-stile-l",
+        name: "左縦",
+        length: H - 2 * fw,
+        width: fw,
+        thickness: sei,
+        materialName,
+      }),
+      stick({
+        id: "panel-stile-r",
+        name: "右縦",
+        length: H - 2 * fw,
+        width: fw,
+        thickness: sei,
+        materialName,
+      }),
+    );
+  }
+
+  pushMidRails(out, answers, {
+    length: railLen,
+    width: fw,
+    thickness: sei,
+    materialName,
+  });
+
+  const mid = midRailCount(H, railPitchMm(answers));
+  pushExtraStiles(out, answers, {
+    sei,
+    fw,
+    materialName,
+    railFaces: railFaceList(fw, fw, fw, mid),
+    height: H,
+  });
+
+  if (dims.withFace) {
+    pushFaces(out, answers, H, W);
+  }
+
+  return out;
+}
+
+function stickPanel(answers: QaAnswers, kind: StickKind): Member[] {
+  const use = answers.boneUse ?? "成使い";
+  const sei = stickSei(kind, use);
+  const fw = stickFace(kind, use);
+  const railsTaruki = kind === "小割" && use === "成使い" && answers.railKind === "上下垂木";
+  if (!railsTaruki) {
+    return frameSticks(answers, {
+      sei,
+      fw,
+      materialName: stickName(kind),
+      withFace: true,
+    });
+  }
+  const railFace = TARUKI.long;
+  const railName = stickName("垂木");
+  const frameName = stickName(kind);
+  const W = answers.width;
+  const H = answers.height;
+  const tateWin = answers.frameWin !== "横勝ち";
+  const short = railShortMm(answers);
+  const railLen = midRailLength(tateWin, W, fw, short);
+  const out: Member[] = [];
+  if (tateWin) {
+    out.push(
+      stick({
+        id: "panel-stile-l",
+        name: "左縦",
+        length: H,
+        width: fw,
+        thickness: sei,
+        materialName: frameName,
+      }),
+      stick({
+        id: "panel-stile-r",
+        name: "右縦",
+        length: H,
+        width: fw,
+        thickness: sei,
+        materialName: frameName,
+      }),
+      stick({
+        id: "panel-rail-t",
+        name: "上桟",
+        length: railLen,
         width: railFace,
         thickness: sei,
         materialName: railName,
@@ -117,7 +394,7 @@ export function panelMembers(answers: QaAnswers): Member[] {
       stick({
         id: "panel-rail-b",
         name: "下桟",
-        length: W - 2 * fw - HANSEI_SHORT_MM,
+        length: railLen,
         width: railFace,
         thickness: sei,
         materialName: railName,
@@ -128,7 +405,7 @@ export function panelMembers(answers: QaAnswers): Member[] {
       stick({
         id: "panel-rail-t",
         name: "上桟",
-        length: W,
+        length: railLen,
         width: railFace,
         thickness: sei,
         materialName: railName,
@@ -136,7 +413,7 @@ export function panelMembers(answers: QaAnswers): Member[] {
       stick({
         id: "panel-rail-b",
         name: "下桟",
-        length: W,
+        length: railLen,
         width: railFace,
         thickness: sei,
         materialName: railName,
@@ -144,43 +421,71 @@ export function panelMembers(answers: QaAnswers): Member[] {
       stick({
         id: "panel-stile-l",
         name: "左縦",
-        length: H - 2 * railFace - HANSEI_SHORT_MM,
+        length: H - 2 * railFace,
         width: fw,
         thickness: sei,
-        materialName: kogaraName,
+        materialName: frameName,
       }),
       stick({
         id: "panel-stile-r",
         name: "右縦",
-        length: H - 2 * railFace - HANSEI_SHORT_MM,
+        length: H - 2 * railFace,
         width: fw,
         thickness: sei,
-        materialName: kogaraName,
+        materialName: frameName,
       }),
     );
   }
-
-  const nakaLen = tateWin
-    ? H - 2 * railFace
-    : H - 2 * railFace - HANSEI_SHORT_MM;
-  for (let i = 0; i < naka; i += 1) {
-    out.push(
-      stick({
-        id: `panel-naka-${i}`,
-        name: `中骨${i + 1}`,
-        length: nakaLen,
-        width: fw,
-        thickness: sei,
-        materialName: kogaraName,
-      }),
-    );
-  }
-
-  const faceMat = answers.faceMaterial ?? "ラワンベニヤ";
-  out.push(skin("panel-face", "面材 表", H, W, faceMat));
-  if (answers.sides === "両面") {
-    out.push(skin("panel-face-back", "面材 裏", H, W, faceMat));
-  }
-
+  pushMidRails(out, answers, {
+    length: railLen,
+    width: fw,
+    thickness: sei,
+    materialName: frameName,
+  });
+  const mid = midRailCount(H, railPitchMm(answers));
+  pushExtraStiles(out, answers, {
+    sei,
+    fw,
+    materialName: frameName,
+    railFaces: railFaceList(railFace, fw, railFace, mid),
+    height: H,
+  });
+  pushFaces(out, answers, H, W);
   return out;
+}
+
+export function panelMembers(answers: QaAnswers): Member[] {
+  const kind = answers.frameKind ?? "小割";
+  if (isNamedTimberKind(kind)) {
+    const spec = timberOf(kind);
+    const t = answers.frameThickness ?? 21;
+    return frameSticks(answers, {
+      sei: t,
+      fw: spec.width,
+      materialName: kind,
+      withFace: true,
+    });
+  }
+  if (isSheetKind(kind)) {
+    if (answers.sheetUse === "割き") {
+      const t = answers.frameThickness ?? 15;
+      const name = answers.frameMaterial ?? kind;
+      return frameSticks(answers, {
+        sei: t,
+        fw: t,
+        materialName: name,
+        withFace: true,
+      });
+    }
+    return boardPanel(answers);
+  }
+  if (isStickKind(kind)) return stickPanel(answers, kind);
+  return stickPanel(answers, "小割");
+}
+
+export function panelSei(answers: QaAnswers): number {
+  const kind = answers.frameKind ?? "小割";
+  if (isNamedTimberKind(kind)) return answers.frameThickness ?? 21;
+  if (isSheetKind(kind)) return answers.frameThickness ?? 15;
+  return stickSei(kind, answers.boneUse ?? "成使い");
 }

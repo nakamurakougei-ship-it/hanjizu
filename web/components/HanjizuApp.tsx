@@ -3,28 +3,58 @@
 import { useEffect, useState } from "react";
 import {
   FACE_MATERIAL_OPTS,
+  FRAME_KINDS,
   MATERIAL_OPTS,
+  SHEET_FACES,
   STEP_TITLES,
-  decidedSteps,
+  asksFaceStock,
   defaultAnswers,
+  frameKindLogLine,
+  logSteps,
   nextStep,
   pathFor,
   prevStep,
   questionFor,
+  railFitLogLine,
+  stileExtraLogLine,
   type BoneUse,
   type FaceBuild,
+  type FrameKind,
   type FrameWin,
   type JoinKind,
   type MaterialOpt,
   type PanelSides,
   type QaAnswers,
+  type FaceStock,
+  type RailFit,
+  type StileExtra,
   type RailKind,
+  type SheetFace,
+  type SheetUse,
   type StepId,
   type TopSection,
 } from "@/lib/qa";
+import {
+  defaultFrameThickness,
+  frameKindHint,
+  isNamedTimberKind,
+  isSheetKind,
+  sheetMaterialName,
+  stickOf,
+} from "@/lib/catalog";
+import { useLedger } from "@/lib/useLedger";
 
 import { ProductIcon, ProductPick } from "@/components/ProductPick";
 import { MemberList } from "@/components/MemberList";
+import {
+  freshPanelAnswers,
+  newPanelId,
+  panelSummaryLine,
+  toPanelEntry,
+  upsertPanel,
+  type PanelEntry,
+} from "@/lib/job";
+import { DEFAULT_RAIL_PITCH_MM } from "@/lib/panel";
 
 type Choice<T extends string> = {
   value: T;
@@ -36,12 +66,14 @@ type Choice<T extends string> = {
 function ChoiceRow<T extends string>({
   choices,
   onPick,
+  wide,
 }: {
   choices: Choice<T>[];
   onPick: (value: T) => void;
+  wide?: boolean;
 }) {
   return (
-    <div className="choice-row">
+    <div className={wide ? "choice-row is-wide" : "choice-row"}>
       {choices.map((choice) => (
         <button
           key={choice.value}
@@ -59,7 +91,11 @@ function ChoiceRow<T extends string>({
   );
 }
 
-function answerLine(step: Exclude<StepId, "done">, answers: QaAnswers): string {
+function answerLine(
+  step: Exclude<StepId, "done">,
+  answers: QaAnswers,
+  current: StepId,
+): string {
   if (step === "product") return answers.product ?? "";
   if (step === "construction") return answers.construction ?? "";
   if (step === "topSection") {
@@ -67,16 +103,30 @@ function answerLine(step: Exclude<StepId, "done">, answers: QaAnswers): string {
     return answers.topSection ?? "";
   }
   if (step === "join") return answers.join ?? "";
+  if (step === "panelName") return answers.name?.trim() ?? "";
   if (step === "size") {
     if (answers.product === "パネル") {
       return `${answers.width} × ${answers.height} mm ${answers.sides ?? ""}`;
     }
     return `${answers.width} × ${answers.depth} × ${answers.height} mm`;
   }
+  if (step === "railFit") return railFitLogLine(answers, current);
+  if (step === "faceStock") return answers.faceStock ?? "";
+  if (step === "railPitch") {
+    return answers.railPitch != null ? `${answers.railPitch}mm` : "";
+  }
+  if (step === "stileExtra") return stileExtraLogLine(answers, current);
+  if (step === "frameKind") return frameKindLogLine(answers, current);
   if (step === "boneUse") return answers.boneUse ?? "";
   if (step === "railKind") return answers.railKind ?? "";
   if (step === "frameWin") return answers.frameWin ?? "縦勝ち";
+  if (step === "sheetUse") {
+    return answers.sheetUse === "割き" ? "割いた幅を厚みにする" : answers.sheetUse === "厚み" ? "厚みを使う" : "";
+  }
   if (step === "materials") return `${answers.faceMaterial ?? ""} 3mm`;
+  if (step === "qty") {
+    return answers.qty != null ? `${answers.qty}枚` : "";
+  }
   if (step === "finish") {
     return `長手 ${answers.finishLong} ／ 短手 ${answers.finishShort}`;
   }
@@ -87,14 +137,27 @@ export function HanjizuApp() {
   const [hasBg, setHasBg] = useState(true);
   const [answers, setAnswers] = useState<QaAnswers>(defaultAnswers);
   const [step, setStep] = useState<StepId>("product");
+  const [panels, setPanels] = useState<PanelEntry[]>([]);
+  const [addingAnother, setAddingAnother] = useState(false);
   const [entering, setEntering] = useState(true);
 
   const [opening, setOpening] = useState(true);
   const [openingOut, setOpeningOut] = useState(false);
-  const decided = decidedSteps(step, answers);
+  const ledger = useLedger();
+  const decided = logSteps(step, answers);
+  const currentLog =
+    step === "done" ? [] : decided.filter((id) => id !== "product");
+  const showProduct = Boolean(answers.product) && step !== "product";
   const panelFollowUp =
     answers.product === "パネル" && step !== "product" && step !== "done";
-  const backTo = prevStep(step, answers);
+  const roster =
+    step === "done"
+      ? panels
+      : panels.filter((item) => item.id !== answers.panelId);
+  const backTo =
+    step === "panelName" && addingAnother && roster.length > 0
+      ? ("morePanels" as const)
+      : prevStep(step, answers);
 
   useEffect(() => {
     fetch("/hanjizu-bg-blue.png", { method: "HEAD" })
@@ -145,6 +208,36 @@ export function HanjizuApp() {
         join: () => {
           delete next.join;
         },
+        panelName: () => {
+          delete next.name;
+        },
+        railFit: () => {
+          delete next.railFit;
+          delete next.railAllow;
+        },
+        railAllow: () => {
+          delete next.railAllow;
+        },
+        railPitch: () => {
+          delete next.railPitch;
+        },
+        faceStock: () => {
+          delete next.faceStock;
+        },
+        stileExtra: () => {
+          delete next.stileExtra;
+          delete next.stileExtraN;
+        },
+        stileExtraN: () => {
+          delete next.stileExtraN;
+        },
+        frameKind: () => {
+          delete next.frameKind;
+          delete next.sheetFace;
+        },
+        sheetFace: () => {
+          delete next.sheetFace;
+        },
         boneUse: () => {
           delete next.boneUse;
         },
@@ -154,8 +247,18 @@ export function HanjizuApp() {
         frameWin: () => {
           delete next.frameWin;
         },
+        frameStock: () => {
+          delete next.frameMaterial;
+          delete next.frameThickness;
+        },
+        sheetUse: () => {
+          delete next.sheetUse;
+        },
         materials: () => {
           delete next.faceMaterial;
+        },
+        qty: () => {
+          delete next.qty;
         },
       };
       for (const id of Object.keys(forget)) {
@@ -166,15 +269,57 @@ export function HanjizuApp() {
         delete next.construction;
         delete next.topSection;
         delete next.join;
+        delete next.frameKind;
         delete next.boneUse;
         delete next.railKind;
         delete next.frameWin;
+        delete next.frameMaterial;
+        delete next.frameThickness;
+        delete next.sheetFace;
+        delete next.sheetUse;
         delete next.sides;
         delete next.faceMaterial;
+        delete next.railFit;
+        delete next.railAllow;
+        delete next.railPitch;
+        delete next.faceStock;
+        delete next.stileExtra;
+        delete next.stileExtraN;
+        delete next.name;
+        delete next.qty;
+        delete next.panelId;
       }
       return next;
     });
+    if (to === "product") {
+      setPanels([]);
+      setAddingAnother(false);
+    }
     goTo(to);
+  }
+
+  function editSavedPanel(id: string) {
+    const entry = panels.find((item) => item.id === id);
+    if (!entry) return;
+    setAddingAnother(false);
+    setAnswers(entry.answers);
+    goTo("panelName");
+  }
+
+  function goBack() {
+    if (step === "panelName" && addingAnother && panels.length > 0) {
+      const last = panels[panels.length - 1];
+      setAddingAnother(false);
+      setPanels(panels.slice(0, -1));
+      setAnswers(last.answers);
+      goTo("morePanels");
+      return;
+    }
+    if (step === "panelName" && !addingAnother && panels.length > 0) {
+      goTo("done");
+      return;
+    }
+    if (backTo) rewind(backTo);
   }
 
   return (
@@ -210,24 +355,54 @@ export function HanjizuApp() {
         )}
 
         <div className="card-body">
-          {decided.length > 0 ? (
+          {showProduct || panels.length > 0 || currentLog.length > 0 ? (
             <ul className="log">
-              {decided.map((id) => (
-                <li key={id}>
+              {showProduct ? (
+                <li>
                   <button
                     type="button"
-                    className={id === "product" ? "log-item is-product" : "log-item"}
-                    onClick={() => rewind(id)}
+                    className="log-item is-product"
+                    onClick={() => rewind("product")}
                   >
-                    {id === "product" && answers.product ? (
+                    {answers.product ? (
                       <span className="log-icon">
                         <ProductIcon kind={answers.product} />
                       </span>
                     ) : null}
                     <span className="log-text">
+                      <span className="decided-key">{STEP_TITLES.product}</span>
+                      <span className="decided-val">{answers.product}</span>
+                    </span>
+                  </button>
+                </li>
+              ) : null}
+              {roster.map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    className="log-item is-saved-panel"
+                    onClick={() => editSavedPanel(entry.id)}
+                  >
+                    <span className="log-text">
+                      <span className="decided-key">パネル</span>
+                      <span className="decided-val">
+                        {panelSummaryLine(entry.answers)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {currentLog.map((id) => (
+                <li key={id}>
+                  <button
+                    type="button"
+                    className="log-item"
+                    onClick={() => rewind(id)}
+                  >
+                    <span className="log-text">
                       <span className="decided-key">{STEP_TITLES[id]}</span>
                       <span className="decided-val">
-                        {answerLine(id, answers)}
+                        {answerLine(id, answers, step)}
                       </span>
                     </span>
                   </button>
@@ -238,7 +413,7 @@ export function HanjizuApp() {
 
           {step === "done" ? (
             <div className="parts-mobile">
-              <MemberList answers={answers} />
+              <MemberList answers={answers} panels={panels} ledger={ledger} />
             </div>
           ) : (
             <div className="now">
@@ -250,6 +425,7 @@ export function HanjizuApp() {
                       ? {
                           ...answers,
                           product: value,
+                          panelId: answers.panelId ?? newPanelId(),
                           width: 900,
                           height: 1800,
                           sides: "片面" as const,
@@ -303,6 +479,42 @@ export function HanjizuApp() {
                   goTo(nextStep("join", next));
                 }}
               />
+            ) : null}
+
+            {step === "panelName" ? (
+              <form
+                className="composer-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const typed = answers.name?.trim();
+                  const next = {
+                    ...answers,
+                    name: typed || `パネル${panels.length + 1}`,
+                    panelId: answers.panelId ?? newPanelId(),
+                  };
+                  setAnswers(next);
+                  goTo(nextStep("panelName", next));
+                }}
+              >
+                <p className="now-ask">パネルの名称は？</p>
+                <label>
+                  名称
+                  <input
+                    type="text"
+                    value={answers.name ?? ""}
+                    placeholder="入力してください"
+                    onChange={(event) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        name: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <button type="submit" className="next">
+                  この名称で進む
+                </button>
+              </form>
             ) : null}
 
             {step === "size" ? (
@@ -413,14 +625,160 @@ export function HanjizuApp() {
               </form>
             ) : null}
 
-            {step === "boneUse" ? (
+            {step === "railFit" ? (
               <>
-                <p className="now-ask">骨の向きを選択</p>
+                <p className="now-ask">横桟の長さは、枠材の寸面通りですか。余裕を設けますか。</p>
                 <ChoiceRow
                   choices={[
-                    { value: "成使い", label: "成使い", hint: "成 30mm", ready: true },
-                    { value: "横使い", label: "横使い", hint: "成 20mm", ready: true },
+                    {
+                      value: "寸面通り",
+                      label: "枠材寸面通りで計算",
+                      ready: true,
+                    },
+                    {
+                      value: "余裕",
+                      label: "余裕を設ける",
+                      hint: "ミリを次で入れる",
+                      ready: true,
+                    },
                   ]}
+                  onPick={(value: RailFit) => {
+                    const next = { ...answers, railFit: value };
+                    if (value === "寸面通り") delete next.railAllow;
+                    setAnswers(next);
+                    goTo(nextStep("railFit", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "railAllow" ? (
+              <form
+                className="composer-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const n = Math.max(0, Number(answers.railAllow ?? 1));
+                  const next = { ...answers, railAllow: n };
+                  setAnswers(next);
+                  goTo(nextStep("railAllow", next));
+                }}
+              >
+                <p className="now-ask">横桟の余裕は、何ミリですか。</p>
+                <label>
+                  余裕
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={answers.railAllow ?? 1}
+                    onChange={(event) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        railAllow: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <button type="submit" className="next">
+                  この余裕で進む
+                </button>
+              </form>
+            ) : null}
+
+            {step === "faceStock" ? (
+              <>
+                <p className="now-ask">
+                  横幅が 3×6 を超えるので、面材は 3×6 で作りますか。4×8 も含めますか。
+                </p>
+                <ChoiceRow
+                  choices={[
+                    {
+                      value: "3×6",
+                      label: "3×6で作る",
+                      hint: "縦の継ぎと繋ぎ材",
+                      ready: true,
+                    },
+                    {
+                      value: "4×8込み",
+                      label: "4×8も含める",
+                      ready: true,
+                    },
+                  ]}
+                  onPick={(value: FaceStock) => {
+                    const next = { ...answers, faceStock: value };
+                    setAnswers(next);
+                    goTo(nextStep("faceStock", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "frameKind" ? (
+              <>
+                <p className="now-ask">枠材は何を使いますか？</p>
+                <ChoiceRow
+                wide
+                choices={FRAME_KINDS.map((value) => ({
+                  value,
+                  label: value,
+                  hint: frameKindHint(value),
+                  ready: true,
+                }))}
+                onPick={(value: FrameKind) => {
+                  const next = { ...answers, frameKind: value };
+                  if (value !== "小割") delete next.railKind;
+                  if (isNamedTimberKind(value) || isSheetKind(value)) {
+                    delete next.boneUse;
+                    delete next.railKind;
+                    delete next.frameWin;
+                    delete next.faceMaterial;
+                    delete next.sheetUse;
+                    delete next.sheetFace;
+                    if (isNamedTimberKind(value)) {
+                      next.frameMaterial = value;
+                      if (next.frameThickness == null) {
+                        next.frameThickness = defaultFrameThickness(value);
+                      }
+                    } else {
+                      delete next.frameMaterial;
+                      delete next.frameThickness;
+                    }
+                  } else {
+                    delete next.frameMaterial;
+                    delete next.frameThickness;
+                    delete next.sheetFace;
+                    delete next.sheetUse;
+                  }
+                  setAnswers(next);
+                  goTo(nextStep("frameKind", next));
+                }}
+              />
+              </>
+            ) : null}
+
+            {step === "boneUse" ? (
+              <>
+                <p className="now-ask">枠材の向きを選択</p>
+                <ChoiceRow
+                  choices={(() => {
+                    const spec = stickOf(
+                      answers.frameKind === "垂木" ? "垂木" : "小割",
+                    );
+                    return [
+                      {
+                        value: "成使い" as const,
+                        label: "成使い",
+                        hint: `成 ${spec.long}mm`,
+                        ready: true,
+                      },
+                      {
+                        value: "横使い" as const,
+                        label: "横使い",
+                        hint: `成 ${spec.short}mm`,
+                        ready: true,
+                      },
+                    ];
+                  })()}
                   onPick={(value: BoneUse) => {
                     const next = { ...answers, boneUse: value };
                     if (value === "横使い") delete next.railKind;
@@ -464,6 +822,112 @@ export function HanjizuApp() {
               />
             ) : null}
 
+            {step === "sheetFace" && isSheetKind(answers.frameKind) ? (
+              <>
+                <p className="now-ask">ラワンですか、シナですか。</p>
+                <ChoiceRow
+                  choices={SHEET_FACES.map((value) => ({
+                    value,
+                    label: value,
+                    ready: true,
+                  }))}
+                  onPick={(value: SheetFace) => {
+                    const kind = answers.frameKind;
+                    if (!isSheetKind(kind)) return;
+                    const next = {
+                      ...answers,
+                      sheetFace: value,
+                      frameMaterial: sheetMaterialName(kind, value),
+                    };
+                    if (next.frameThickness == null) {
+                      next.frameThickness = defaultFrameThickness(kind);
+                    }
+                    setAnswers(next);
+                    goTo(nextStep("sheetFace", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "frameStock" &&
+            (isNamedTimberKind(answers.frameKind) ||
+              isSheetKind(answers.frameKind)) ? (
+              <form
+                className="composer-form panel-size"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const kind = answers.frameKind;
+                  const t =
+                    answers.frameThickness ?? defaultFrameThickness(kind);
+                  const material = isSheetKind(kind)
+                    ? (answers.frameMaterial ??
+                      (answers.sheetFace
+                        ? sheetMaterialName(kind, answers.sheetFace)
+                        : kind))
+                    : kind;
+                  const next = {
+                    ...answers,
+                    frameMaterial: material,
+                    frameThickness: t,
+                  };
+                  setAnswers(next);
+                  goTo(nextStep("frameStock", next));
+                }}
+              >
+                <p className="now-ask">{questionFor("frameStock", answers)}</p>
+                <div className="dims">
+                  <label>
+                    厚み
+                    <input
+                      type="number"
+                      min={1}
+                      step={0.5}
+                      value={
+                        answers.frameThickness ??
+                        defaultFrameThickness(answers.frameKind)
+                      }
+                      onChange={(event) =>
+                        setAnswers((prev) => ({
+                          ...prev,
+                          frameThickness: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <button type="submit" className="next">
+                  この厚みで進む
+                </button>
+              </form>
+            ) : null}
+
+            {step === "sheetUse" ? (
+              <>
+                <p className="now-ask">厚みの使い方を選択</p>
+                <ChoiceRow
+                  choices={[
+                    {
+                      value: "厚み" as const,
+                      label: "厚みを使う",
+                      hint: "プレスなど",
+                      ready: true,
+                    },
+                    {
+                      value: "割き" as const,
+                      label: "割いた幅を厚みにする",
+                      hint: "厚パネル",
+                      ready: true,
+                    },
+                  ]}
+                  onPick={(value: SheetUse) => {
+                    const next = { ...answers, sheetUse: value };
+                    setAnswers(next);
+                    goTo(nextStep("sheetUse", next));
+                  }}
+                />
+              </>
+            ) : null}
+
             {step === "materials" ? (
               <ChoiceRow
                 choices={FACE_MATERIAL_OPTS.map((name) => ({
@@ -477,6 +941,185 @@ export function HanjizuApp() {
                   goTo(nextStep("materials", next));
                 }}
               />
+            ) : null}
+
+            {step === "railPitch" ? (
+              <form
+                className="composer-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const n = Math.max(
+                    1,
+                    Number(answers.railPitch ?? DEFAULT_RAIL_PITCH_MM),
+                  );
+                  const next = { ...answers, railPitch: n };
+                  setAnswers(next);
+                  goTo(nextStep("railPitch", next));
+                }}
+              >
+                <p className="now-ask">横桟の間隔は、何ミリですか。</p>
+                <label>
+                  間隔
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={answers.railPitch ?? DEFAULT_RAIL_PITCH_MM}
+                    onChange={(event) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        railPitch: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <button type="submit" className="next">
+                  この間隔で進む
+                </button>
+              </form>
+            ) : null}
+
+            {step === "stileExtra" ? (
+              <>
+                <p className="now-ask">中に縦残を追加しますか？</p>
+                <ChoiceRow
+                  choices={
+                    asksFaceStock(answers)
+                      ? [
+                          {
+                            value: "入れる",
+                            label: "追加する",
+                            hint: "横幅が 3×6 を超えるので必要",
+                            ready: true,
+                          },
+                        ]
+                      : [
+                          {
+                            value: "入れる",
+                            label: "追加する",
+                            hint: "金物下地など",
+                            ready: true,
+                          },
+                          {
+                            value: "入れない",
+                            label: "入れない",
+                            ready: true,
+                          },
+                        ]
+                  }
+                  onPick={(value: StileExtra) => {
+                    const next = { ...answers, stileExtra: value };
+                    if (value === "入れない") delete next.stileExtraN;
+                    setAnswers(next);
+                    goTo(nextStep("stileExtra", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "stileExtraN" ? (
+              <form
+                className="composer-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const n = Math.max(1, Math.floor(Number(answers.stileExtraN ?? 1)));
+                  const next = {
+                    ...answers,
+                    stileExtra: "入れる" as StileExtra,
+                    stileExtraN: n,
+                  };
+                  setAnswers(next);
+                  goTo(nextStep("stileExtraN", next));
+                }}
+              >
+                <p className="now-ask">縦残は何列入れますか？</p>
+                <label>
+                  列数
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={answers.stileExtraN ?? 1}
+                    onChange={(event) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        stileExtraN: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <button type="submit" className="next">
+                  この列数で進む
+                </button>
+              </form>
+            ) : null}
+
+            {step === "qty" ? (
+              <form
+                className="composer-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const n = Math.max(1, Math.floor(answers.qty ?? 1));
+                  const next = { ...answers, qty: n };
+                  setAnswers(next);
+                  goTo(nextStep("qty", next));
+                }}
+              >
+                <p className="now-ask">製作枚数は、何枚ですか。</p>
+                <label>
+                  枚数
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={answers.qty ?? 1}
+                    onChange={(event) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        qty: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <button type="submit" className="next">
+                  この枚数で進む
+                </button>
+              </form>
+            ) : null}
+
+            {step === "morePanels" ? (
+              <>
+                <p className="now-ask">次のパネルを入力しますか？</p>
+                <ChoiceRow
+                  choices={[
+                    {
+                      value: "入力する",
+                      label: "入力する",
+                      hint: "名称から続けます",
+                      ready: true,
+                    },
+                    {
+                      value: "入力しない",
+                      label: "入力しない",
+                      hint: "結果を出します",
+                      ready: true,
+                    },
+                  ]}
+                  onPick={(value: string) => {
+                    const entry = toPanelEntry(answers);
+                    if (value === "入力する") {
+                      setAddingAnother(true);
+                      setPanels((prev) => upsertPanel(prev, entry));
+                      setAnswers(freshPanelAnswers());
+                      goTo("panelName");
+                      return;
+                    }
+                    setAddingAnother(false);
+                    setPanels((prev) => upsertPanel(prev, entry));
+                    goTo("done");
+                  }}
+                />
+              </>
             ) : null}
 
             {step === "finish" ? (
@@ -560,11 +1203,12 @@ export function HanjizuApp() {
             </div>
           )}
 
-          {backTo ? (
+          {backTo ||
+          (step === "panelName" && (addingAnother || panels.length > 0)) ? (
             <button
               type="button"
               className="back"
-              onClick={() => rewind(backTo)}
+              onClick={() => goBack()}
             >
               ひとつ前の設定に戻る
             </button>
@@ -575,7 +1219,9 @@ export function HanjizuApp() {
       </div>
 
       <section className="sheets" aria-label="木取図" aria-hidden={opening}>
-        {step === "done" ? <MemberList answers={answers} /> : null}
+        {step === "done" ? (
+          <MemberList answers={answers} panels={panels} ledger={ledger} />
+        ) : null}
       </section>
     </main>
   );
