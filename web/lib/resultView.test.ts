@@ -3,9 +3,11 @@ import { test } from "node:test";
 import { defaultAnswers } from "./qa";
 import { membersFromPanel } from "./job";
 import {
+  isHeightJoinName,
   isRailName,
   isStileName,
   materialLabel,
+  stickRoleLabel,
   railGroups,
   railKindLabel,
   stickCutsByMaterial,
@@ -146,6 +148,41 @@ test("棒の木取図は縦横を分けず材料ごとにネストする", () =>
   );
   assert.equal(cuts["小割 20×30"], 2);
   assert.equal(cuts["垂木 30×40"], 1);
+});
+
+test("繋ぎは木取図に載せ、並びは縦残・横桟・繋ぎ", () => {
+  assert.equal(isHeightJoinName("繋ぎ1"), true);
+  assert.equal(isHeightJoinName("玄関袖 繋ぎ2"), true);
+  assert.equal(isHeightJoinName("中桟1"), false);
+  assert.equal(stickRoleLabel("繋ぎ1", "垂木 30×40 30"), "繋ぎ（垂木）");
+  const members = membersFromPanel({
+    ...defaultAnswers(),
+    product: "パネル",
+    name: "玄関袖",
+    width: 900,
+    height: 2000,
+    sides: "片面",
+    frameKind: "小割",
+    boneUse: "成使い",
+    railKind: "全部小割",
+    railFit: "寸面通り",
+    faceMaterial: "ラワンベニヤ",
+    qty: 1,
+  });
+  const labels = stickMemberLines(members).map((line) => line.label);
+  const firstJoin = labels.findIndex((label) => label.startsWith("繋ぎ"));
+  const lastStile = labels.reduce(
+    (last, label, i) => (label.startsWith("縦残") ? i : last),
+    -1,
+  );
+  const lastRail = labels.reduce(
+    (last, label, i) => (label.startsWith("横桟") ? i : last),
+    -1,
+  );
+  assert.ok(firstJoin >= 0);
+  assert.ok(lastStile >= 0 && lastRail >= 0);
+  assert.ok(lastStile < lastRail);
+  assert.ok(lastRail < firstJoin);
 });
 
 test("使用材の表示は枠材が本、ベニヤは厚み＋名前＋定尺", () => {

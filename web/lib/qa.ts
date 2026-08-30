@@ -6,7 +6,7 @@ import {
   type FrameKind,
   type SheetFace,
 } from "./catalog";
-import { USABLE_36, fitsOn } from "./stock";
+import { STOCK_36, USABLE_36, fitsOn } from "./stock";
 
 export const MATERIAL_OPTS = [
   "仕上げ無し",
@@ -53,6 +53,8 @@ export type FaceKind = "ベニヤ" | "ランバー";
 export type FaceWood = "ラワン" | "突板" | "ポリ板" | "ランバー";
 export type StileExtra = "入れる" | "入れない";
 export type StileExtraMat = "小割" | "垂木" | "垂木を削る";
+export type HeightJoin = "入れる";
+export type HeightJoinMat = "垂木" | "垂木を削る" | "小割";
 
 export const FACE_STOCK_OPTS = ["3×6", "3×8", "4×8"] as const;
 export const FACE_KIND_OPTS = ["ベニヤ", "ランバー"] as const;
@@ -103,6 +105,8 @@ export type QaAnswers = {
   stileExtra?: StileExtra;
   stileExtraN?: number;
   stileExtraMat?: StileExtraMat;
+  heightJoin?: HeightJoin;
+  heightJoinMat?: HeightJoinMat;
   sides?: PanelSides;
   faceMaterial?: string;
   name?: string;
@@ -138,6 +142,8 @@ export type StepId =
   | "stileExtra"
   | "stileExtraN"
   | "stileExtraMat"
+  | "heightJoin"
+  | "heightJoinMat"
   | "frameKind"
   | "boneUse"
   | "railKind"
@@ -168,11 +174,30 @@ export function asksRailPitch(answers: QaAnswers): boolean {
   return isSheetKind(answers.frameKind) && answers.sheetUse === "割き";
 }
 
-/** 横幅が 3×6 の巾を超えるとき。縦が 3×6 の長さを超えるのは別枝。 */
+/** 横幅が 3×6 の巾を超えるとき。縦が 3×6 の長さを超えるのは asksHeightJoin。 */
 export function asksFaceStock(answers: QaAnswers): boolean {
   if (answers.product !== "パネル") return false;
   if (answers.width <= USABLE_36.width) return false;
   return !fitsOn(answers.height, answers.width, USABLE_36, true);
+}
+
+function faceIs36(stock: FaceStock | undefined): boolean {
+  return (stock ?? "3×6") === "3×6";
+}
+
+/** 小割・垂木かつ高さが 3×6 の長さを超え、面のどれかが 3×6 のとき。 */
+export function asksHeightJoin(answers: QaAnswers): boolean {
+  if (answers.product !== "パネル") return false;
+  if (!isStickKind(answers.frameKind ?? "小割")) return false;
+  if (answers.height <= STOCK_36.length) return false;
+  if (faceIs36(answers.faceStock)) return true;
+  return faceSidesDiffer(answers) && faceIs36(answers.faceStockBack);
+}
+
+/** 小割の平使いのときだけ、繋ぎの材料を聞く。 */
+export function asksHeightJoinMat(answers: QaAnswers): boolean {
+  if (!asksHeightJoin(answers)) return false;
+  return answers.frameKind === "小割" && answers.boneUse === "横使い";
 }
 
 /** 小割・垂木の面材。定尺・種類・厚みを聞く。 */
@@ -184,11 +209,10 @@ export function faceSidesDiffer(answers: QaAnswers): boolean {
   return answers.sides === "両面" && answers.faceSame === "いいえ";
 }
 
-function faceStockQuestion(wide: boolean, side?: "表" | "裏"): string {
-  const who = side ? `${side}の` : "";
+function faceStockQuestion(wide: boolean): string {
   return wide
-    ? `横幅が910mmを超えるので確認です。${who}面材は3×6と3×8と4×8のどれを使いますか？`
-    : `${who}面材は何を使いますか？`;
+    ? "横幅が910mmを超えるので確認です。面材は3×6と3×8と4×8のどれを使いますか？"
+    : "面材は何を使いますか？";
 }
 
 function pushFaceMaterialSteps(path: StepId[], answers: QaAnswers) {
@@ -220,6 +244,12 @@ function pushStileExtraSteps(path: StepId[], answers: QaAnswers) {
   }
 }
 
+function pushHeightJoinSteps(path: StepId[], answers: QaAnswers) {
+  if (!asksHeightJoin(answers)) return;
+  path.push("heightJoin");
+  if (asksHeightJoinMat(answers)) path.push("heightJoinMat");
+}
+
 export function pathFor(answers: QaAnswers): StepId[] {
   if (answers.product !== "パネル") return BOX_PATH;
   const path: StepId[] = ["product", "panelName", "size", "frameKind"];
@@ -239,6 +269,7 @@ export function pathFor(answers: QaAnswers): StepId[] {
   path.push("railFit");
   if (answers.railFit === "余裕") path.push("railAllow");
   if (asksFaceMaterials(answers)) pushFaceMaterialSteps(path, answers);
+  pushHeightJoinSteps(path, answers);
   if (asksFaceStock(answers) && asksRailPitch(answers)) {
     pushStileExtraSteps(path, answers);
   }
@@ -301,7 +332,7 @@ export function questionFor(step: StepId, answers: QaAnswers): string {
   if (step === "faceKind") return "面材は、ベニヤですか。ランバーですか。";
   if (step === "faceWood") return "面材は、ラワン・突板・ポリ板・ランバーのどれですか。";
   if (step === "faceThick") return "面材の厚みは、何ミリですか。";
-  if (step === "faceStockBack") return faceStockQuestion(asksFaceStock(answers), "裏");
+  if (step === "faceStockBack") return "裏の面材は何を使いますか？";
   if (step === "faceKindBack") return "裏の面材は、ベニヤですか。ランバーですか。";
   if (step === "faceWoodBack") return "裏の面材は、ラワン・突板・ポリ板・ランバーのどれですか。";
   if (step === "faceThickBack") return "裏の面材の厚みは、何ミリですか。";
@@ -311,6 +342,14 @@ export function questionFor(step: StepId, answers: QaAnswers): string {
     return answers.boneUse === "横使い"
       ? "中の縦残は、小割の平ですか。垂木を20mmに削りますか。"
       : "中の縦残は、何を使いますか。";
+  }
+  if (step === "heightJoin") {
+    return "高さが1820mmを超えるので確認です。繋ぎ材を入れますか？";
+  }
+  if (step === "heightJoinMat") {
+    return answers.boneUse === "横使い"
+      ? "繋ぎは、小割の平ですか。垂木を20mmに削りますか。"
+      : "繋ぎは、何を使いますか。";
   }
   if (step === "frameKind") return "枠材は何を使いますか？";
   if (step === "boneUse") return "枠材の向きを選択";
@@ -362,6 +401,8 @@ export const STEP_TITLES: Record<Exclude<StepId, "done">, string> = {
   stileExtra: "縦残",
   stileExtraN: "縦残の列数",
   stileExtraMat: "縦残の材料",
+  heightJoin: "繋ぎ材",
+  heightJoinMat: "繋ぎの材料",
   frameKind: "枠材",
   boneUse: "枠材の向き",
   railKind: "上下桟",
@@ -394,6 +435,7 @@ const FOLDED_FRAME_STEPS: ReadonlySet<StepId> = new Set([
   "railAllow",
   "stileExtraN",
   "stileExtraMat",
+  "heightJoinMat",
   "faceKind",
   "faceWood",
   "faceThick",
@@ -473,6 +515,19 @@ export function stileExtraLogLine(answers: QaAnswers, current: StepId): string {
     );
   }
   if (bits.length > 0) return bits.join(" ");
+  return "追加する";
+}
+
+export function heightJoinLogLine(answers: QaAnswers, current: StepId): string {
+  if (answers.heightJoin !== "入れる") return "";
+  if (
+    answers.heightJoinMat &&
+    stepAlreadyDecided("heightJoinMat", current, answers)
+  ) {
+    return answers.heightJoinMat === "垂木を削る"
+      ? "垂木を20mmに削る"
+      : answers.heightJoinMat;
+  }
   return "追加する";
 }
 

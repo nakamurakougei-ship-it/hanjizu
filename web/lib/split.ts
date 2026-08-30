@@ -147,7 +147,21 @@ export function splitOversize(members: Member[]): Member[] {
   );
 }
 
-/** 横幅が 3×6 の巾を超えるとき、巾方向だけ分割する。縦長超えの分割は別枝。 */
+/** 高さが 3×6 の長さを超えるとき、長さ方向だけ分割する。 */
+export function splitByPanelHeight(
+  members: Member[],
+  panelHeight: number,
+  panelWidth: number,
+  maxLength: number = USABLE_36.length,
+): Member[] {
+  if (panelHeight <= maxLength + EPS) return members;
+  const heightIsLongSide = panelHeight >= panelWidth;
+  return members.flatMap((src) =>
+    heightIsLongSide ? cutAlongLength(src, maxLength) : cutAlongWidth(src, maxLength),
+  );
+}
+
+/** 横幅が 3×6 の巾を超えるとき、巾方向だけ分割する。 */
 export function splitByPanelWidth(
   members: Member[],
   panelWidth: number,

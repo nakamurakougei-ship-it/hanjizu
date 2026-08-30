@@ -8,6 +8,7 @@ import {
   extraStileColumns,
   extraStilePlaneNote,
   extraStileSegLength,
+  heightJoinCount,
   midRailCount,
   panelFinishThickness,
   panelMembers,
@@ -23,6 +24,7 @@ import {
   type QaAnswers,
   railFitLogLine,
   asksFaceStock,
+  asksHeightJoin,
 } from "./qa";
 
 function panelAnswers(patch: Partial<QaAnswers> = {}): QaAnswers {
@@ -204,11 +206,15 @@ test("パネルの質問は寸法のあと枠材、向き、それから横桟�
     pathFor(panelAnswers({ sides: "両面" })).includes("faceSame"),
     true,
   );
-  assert.ok(
-    pathFor(
-      panelAnswers({ sides: "両面", faceSame: "いいえ" }),
-    ).includes("faceStockBack"),
+  const differ = panelAnswers({ sides: "両面", faceSame: "いいえ" });
+  assert.ok(pathFor(differ).includes("faceStockBack"));
+  assert.equal(questionFor("faceStockBack", differ), "裏の面材は何を使いますか？");
+  assert.equal(
+    questionFor("faceStockBack", { ...differ, width: 1200 }),
+    "裏の面材は何を使いますか？",
   );
+  assert.ok(pathFor(differ).includes("faceKindBack"));
+  assert.ok(pathFor(differ).includes("faceThickBack"));
 
   const yokotsukai = panelAnswers({ boneUse: "横使い" });
   assert.equal(pathFor(yokotsukai).includes("railKind"), false);
@@ -372,10 +378,11 @@ test("ジェルトンの枠は定尺2430から本数を出す", () => {
   assert.equal(cut.unfit.length, 0);
 });
 
-test("横幅が3×6を超えるときは定尺のあと面材の種類、それから縦残。縦長超えは聞かない", () => {
+test("横幅が3×6を超えるときは定尺のあと面材の種類、それから縦残。高さ超えは面材定尺では聞かない", () => {
   assert.equal(asksFaceStock(panelAnswers()), false);
   assert.equal(asksFaceStock(panelAnswers({ width: 1800, height: 900 })), false);
   assert.equal(asksFaceStock(panelAnswers({ width: 900, height: 2000 })), false);
+  assert.equal(asksHeightJoin(panelAnswers({ width: 900, height: 2000 })), true);
   const over = panelAnswers({ width: 1200, height: 1800 });
   assert.equal(asksFaceStock(over), true);
   assert.ok(pathFor(over).includes("faceStock"));
@@ -482,5 +489,143 @@ test("1200×1800を3×6で作ると巾だけ分割する", () => {
   ).find((item) => item.name === "面材 表");
   assert.equal(whole?.length, 1800);
   assert.equal(whole?.width, 1200);
+});
+
+test("900×2000・小割・3×6は繋ぎ1本で材料は垂木", () => {
+  const answers = panelAnswers({ height: 2000, faceStock: "3×6" });
+  assert.ok(pathFor(answers).includes("heightJoin"));
+  assert.equal(pathFor(answers).includes("heightJoinMat"), false);
+  assert.equal(nextStep("faceThick", answers), "heightJoin");
+  assert.equal(nextStep("heightJoin", answers), "railPitch");
+  assert.match(questionFor("heightJoin", answers), /1820mm/);
+  assert.equal(heightJoinCount(answers), 1);
+  const members = panelMembers(answers);
+  const join = members.find((item) => item.name === "繋ぎ1");
+  assert.ok(join);
+  assert.equal(join.length, 900 - 2 * 20);
+  assert.equal(join.width, TARUKI.long);
+  assert.equal(join.thickness, 30);
+  assert.equal(join.materialKey, "垂木 30×40 30");
+  assert.equal(
+    members.some((item) => item.name === "繋ぎ2"),
+    false,
+  );
+  const faces = members.filter((item) => item.name.startsWith("面材 表"));
+  assert.ok(faces.length >= 2);
+  assert.equal(
+    faces.reduce((sum, face) => sum + face.length, 0),
+    2000,
+  );
+});
+
+test("900×3700なら繋ぎは2本", () => {
+  const answers = panelAnswers({ height: 3700 });
+  assert.equal(heightJoinCount(answers), 2);
+  const names = panelMembers(answers).map((item) => item.name);
+  assert.ok(names.includes("繋ぎ1"));
+  assert.ok(names.includes("繋ぎ2"));
+});
+
+test("高さが1820ちょうどなら繋ぎは出ない", () => {
+  const answers = panelAnswers({ height: 1820 });
+  assert.equal(heightJoinCount(answers), 0);
+  assert.equal(pathFor(answers).includes("heightJoin"), false);
+  assert.equal(
+    panelMembers(answers).some((item) => item.name.startsWith("繋ぎ")),
+    false,
+  );
+});
+
+test("小割の平使いでは繋ぎの材料を聞き、削るなら注記を出す", () => {
+  const answers = panelAnswers({ height: 2000, boneUse: "横使い" });
+  assert.ok(pathFor(answers).includes("heightJoin"));
+  assert.ok(pathFor(answers).includes("heightJoinMat"));
+  assert.equal(
+    questionFor("heightJoinMat", answers),
+    "繋ぎは、小割の平ですか。垂木を20mmに削りますか。",
+  );
+  const planed = panelMembers({
+    ...answers,
+    heightJoinMat: "垂木を削る",
+  }).find((item) => item.name === "繋ぎ1");
+  assert.ok(planed);
+  assert.equal(planed.materialKey, "垂木 30×40 20");
+  assert.equal(planed.thickness, 20);
+  assert.equal(
+    extraStilePlaneNote({ ...answers, heightJoinMat: "垂木を削る" }),
+    "垂木を20mmに削る条件で木取図を作成",
+  );
+  const kogara = panelMembers({ ...answers, heightJoinMat: "小割" }).find(
+    (item) => item.name === "繋ぎ1",
+  );
+  assert.ok(kogara);
+  assert.equal(kogara.materialKey, "小割 20×30 20");
+});
+
+test("面材が4×8なら高さ2000でも繋ぎは出ない", () => {
+  const answers = panelAnswers({ height: 2000, faceStock: "4×8" });
+  assert.equal(pathFor(answers).includes("heightJoin"), false);
+  assert.equal(heightJoinCount(answers), 0);
+  assert.equal(
+    panelMembers(answers).some((item) => item.name.startsWith("繋ぎ")),
+    false,
+  );
+  const face = panelMembers(answers).find((item) => item.name === "面材 表");
+  assert.equal(face?.length, 2000);
+  assert.equal(face?.width, 900);
+});
+
+test("ジェルトンは高さ2000でも繋ぎを聞かない", () => {
+  const answers = panelAnswers({
+    height: 2000,
+    frameKind: "ジェルトン",
+    frameMaterial: "ジェルトン",
+    frameThickness: 21,
+  });
+  assert.equal(pathFor(answers).includes("heightJoin"), false);
+  assert.equal(heightJoinCount(answers), 0);
+});
+
+test("垂木枠の繋ぎは垂木で、材料は聞かない", () => {
+  const answers = panelAnswers({ height: 2000, frameKind: "垂木" });
+  assert.ok(pathFor(answers).includes("heightJoin"));
+  assert.equal(pathFor(answers).includes("heightJoinMat"), false);
+  const join = panelMembers(answers).find((item) => item.name === "繋ぎ1");
+  assert.ok(join);
+  assert.equal(join.materialKey, "垂木 30×40 40");
+  assert.equal(join.width, 30);
+  assert.equal(join.thickness, 40);
+});
+
+test("表裏別で裏だけ3×6ならその面だけ高さ分割し、繋ぎは入れる", () => {
+  const answers = panelAnswers({
+    height: 2000,
+    sides: "両面",
+    faceSame: "いいえ",
+    faceStock: "4×8",
+    faceStockBack: "3×6",
+  });
+  assert.ok(pathFor(answers).includes("heightJoin"));
+  const members = panelMembers(answers);
+  assert.ok(members.some((item) => item.name === "繋ぎ1"));
+  const front = members.filter((item) => item.name.startsWith("面材 表"));
+  const back = members.filter((item) => item.name.startsWith("面材 裏"));
+  assert.equal(front.length, 1);
+  assert.equal(front[0].length, 2000);
+  assert.ok(back.length >= 2);
+});
+
+test("小割成使いの上下垂木でも中桟は小割のまま、繋ぎは垂木", () => {
+  const members = panelMembers(
+    panelAnswers({ height: 2000, railKind: "上下垂木" }),
+  );
+  assert.equal(
+    members.find((item) => item.name === "中桟1")?.materialKey,
+    "小割 20×30 30",
+  );
+  assert.equal(
+    members.find((item) => item.name === "繋ぎ1")?.materialKey,
+    "垂木 30×40 30",
+  );
 });
 

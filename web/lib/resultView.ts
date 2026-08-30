@@ -92,15 +92,25 @@ export function frameKindShortName(materialKey: string): string {
   return name.replace(/\s+\d+(\.\d+)?$/, "").trim() || name;
 }
 
+export function isHeightJoinName(name: string): boolean {
+  return /(?:^|\s)繋ぎ\d+$/.test(name);
+}
+
 export function stickRoleLabel(name: string, materialKey: string): string {
   const kind = frameKindShortName(materialKey);
   if (isStileName(name) || isVStileName(name)) return `縦残（${kind}）`;
   if (isRailName(name)) return `横桟（${kind}）`;
+  if (isHeightJoinName(name)) return `繋ぎ（${kind}）`;
   return kind;
 }
 
 export function isStickMemberName(name: string): boolean {
-  return isStileName(name) || isRailName(name) || isVStileName(name);
+  return (
+    isStileName(name) ||
+    isRailName(name) ||
+    isVStileName(name) ||
+    isHeightJoinName(name)
+  );
 }
 
 export type StickLine = {
@@ -121,7 +131,13 @@ export function stickMemberLines(members: Member[]): StickLine[] {
   }
   return [...map.values()].sort((a, b) => {
     const rank = (label: string) =>
-      label.startsWith("縦残") ? 0 : label.startsWith("横桟") ? 1 : 2;
+      label.startsWith("縦残")
+        ? 0
+        : label.startsWith("横桟")
+          ? 1
+          : label.startsWith("繋ぎ")
+            ? 2
+            : 3;
     return rank(a.label) - rank(b.label) || a.label.localeCompare(b.label, "ja") || b.length - a.length;
   });
 }

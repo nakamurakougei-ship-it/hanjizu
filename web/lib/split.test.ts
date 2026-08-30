@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { splitByPanelWidth, splitOversize } from "./split";
+import { splitByPanelHeight, splitByPanelWidth, splitOversize } from "./split";
 import { USABLE_36, USABLE_48, fitsSomeStock } from "./stock";
 import type { Member } from "./model";
 
@@ -77,4 +77,23 @@ test("横幅が広い面は巾だけ3×6に分け、縦は切らない", () => {
 
   const tall = splitByPanelWidth([piece(2000, 1200)], 1200, 2000);
   assert.ok(tall.every((part) => part.length === 2000));
+});
+
+test("縦長パネルは長さ方向に割り、横長なら巾方向", () => {
+  const tall = splitByPanelHeight([piece(2000, 900)], 2000, 900);
+  assert.equal(tall.length, 2);
+  assert.ok(tall.every((part) => part.width === 900));
+  assert.equal(
+    tall.reduce((sum, part) => sum + part.length, 0),
+    2000,
+  );
+  assert.ok(tall.every((part) => part.length <= USABLE_36.length));
+
+  const wide = splitByPanelHeight([piece(2500, 2000)], 2000, 2500);
+  assert.ok(wide.every((part) => part.length === 2500));
+  assert.equal(
+    wide.reduce((sum, part) => sum + part.width, 0),
+    2000,
+  );
+  assert.ok(wide.every((part) => part.width <= USABLE_36.length));
 });

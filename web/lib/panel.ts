@@ -13,14 +13,15 @@ import {
 import type { Member } from "./model";
 import {
   asksFaceStock,
+  asksHeightJoin,
   faceMaterialName,
   faceSidesDiffer,
   stockHintOf,
   type FaceStock,
   type QaAnswers,
 } from "./qa";
-import { splitByPanelWidth } from "./split";
-import { USABLE_36, USABLE_38, USABLE_48 } from "./stock";
+import { splitByPanelHeight, splitByPanelWidth } from "./split";
+import { STOCK_36, USABLE_36, USABLE_38, USABLE_48 } from "./stock";
 
 export { KOGARA, TARUKI };
 
@@ -62,6 +63,12 @@ export function extraStileColumns(answers: QaAnswers): number {
   if (!asksFaceStock(answers) && answers.stileExtra !== "入れる") return 0;
   const n = Math.floor(Number(answers.stileExtraN));
   return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** 3×6 を継ぐ繋ぎの段数。1820ちょうどは 0、1821 は 1、3640ちょうどは 1。 */
+export function heightJoinCount(answers: QaAnswers): number {
+  if (!asksHeightJoin(answers)) return 0;
+  return Math.floor((answers.height - 1) / STOCK_36.length);
 }
 
 /** 横桟勝ちの縦残1列分。高さ − 横桟幅×本数 を隙間数で割る */
@@ -106,8 +113,88 @@ function extraStileSpec(
 }
 
 export function extraStilePlaneNote(answers: QaAnswers): string | null {
-  if (answers.stileExtraMat !== "垂木を削る") return null;
+  if (
+    answers.stileExtraMat !== "垂木を削る" &&
+    answers.heightJoinMat !== "垂木を削る"
+  ) {
+    return null;
+  }
   return `垂木を${kogaraSei("横使い")}mmに削る条件で木取図を作成`;
+}
+
+function heightJoinSpec(
+  answers: QaAnswers,
+  frame: { sei: number; fw: number; materialName: string },
+): { width: number; thickness: number; materialName: string } {
+  if (answers.frameKind === "垂木") {
+    return {
+      width: frame.fw,
+      thickness: frame.sei,
+      materialName: frame.materialName,
+    };
+  }
+  const use = answers.boneUse ?? "成使い";
+  if (use === "横使い" && answers.heightJoinMat === "小割") {
+    return {
+      width: kogaraFace(use),
+      thickness: kogaraSei(use),
+      materialName: stickName("小割"),
+    };
+  }
+  if (use === "横使い") {
+    return {
+      width: TARUKI.long,
+      thickness: kogaraSei("横使い"),
+      materialName: stickName("垂木"),
+    };
+  }
+  return {
+    width: TARUKI.long,
+    thickness: frame.sei,
+    materialName: stickName("垂木"),
+  };
+}
+
+function pushHeightJoins(
+  out: Member[],
+  answers: QaAnswers,
+  opts: {
+    sei: number;
+    fw: number;
+    materialName: string;
+    railLen: number;
+  },
+): void {
+  const n = heightJoinCount(answers);
+  if (n <= 0) return;
+  const spec = heightJoinSpec(answers, {
+    sei: opts.sei,
+    fw: opts.fw,
+    materialName: opts.materialName,
+  });
+  for (let i = 0; i < n; i += 1) {
+    out.push(
+      stick({
+        id: `panel-hjoin-${i}`,
+        name: `繋ぎ${i + 1}`,
+        length: opts.railLen,
+        width: spec.width,
+        thickness: spec.thickness,
+        materialName: spec.materialName,
+      }),
+    );
+  }
+}
+
+function railFacesWithJoins(
+  answers: QaAnswers,
+  frame: { sei: number; fw: number; materialName: string },
+  railFaces: number[],
+): number[] {
+  const n = heightJoinCount(answers);
+  if (n <= 0) return railFaces;
+  const face = heightJoinSpec(answers, frame).width;
+  return [...railFaces, ...Array.from({ length: n }, () => face)];
 }
 
 function pushExtraStiles(
@@ -194,7 +281,12 @@ function pushFaces(
       const stock: FaceStock =
         hint === "3x8" ? "3×8" : hint === "4x8" ? "4×8" : "3×6";
       const maxW = stockUsableWidth(stock);
-      return width > maxW ? splitByPanelWidth([item], width, height, maxW) : [item];
+      const byWidth =
+        width > maxW ? splitByPanelWidth([item], width, height, maxW) : [item];
+      if (stock === "3×6" && height > STOCK_36.length) {
+        return splitByPanelHeight(byWidth, height, width, USABLE_36.length);
+      }
+      return byWidth;
     }),
   );
 }
@@ -398,13 +490,18 @@ function frameSticks(
     thickness: sei,
     materialName,
   });
+  pushHeightJoins(out, answers, { sei, fw, materialName, railLen });
 
   const mid = midRailCount(H, railPitchMm(answers));
   pushExtraStiles(out, answers, {
     sei,
     fw,
     materialName,
-    railFaces: railFaceList(fw, fw, fw, mid),
+    railFaces: railFacesWithJoins(
+      answers,
+      { sei, fw, materialName },
+      railFaceList(fw, fw, fw, mid),
+    ),
     height: H,
   });
 
@@ -514,12 +611,22 @@ function stickPanel(answers: QaAnswers, kind: StickKind): Member[] {
     thickness: sei,
     materialName: frameName,
   });
+  pushHeightJoins(out, answers, {
+    sei,
+    fw,
+    materialName: frameName,
+    railLen,
+  });
   const mid = midRailCount(H, railPitchMm(answers));
   pushExtraStiles(out, answers, {
     sei,
     fw,
     materialName: frameName,
-    railFaces: railFaceList(railFace, fw, railFace, mid),
+    railFaces: railFacesWithJoins(
+      answers,
+      { sei, fw, materialName: frameName },
+      railFaceList(railFace, fw, railFace, mid),
+    ),
     height: H,
   });
   pushFaces(out, answers, H, W);

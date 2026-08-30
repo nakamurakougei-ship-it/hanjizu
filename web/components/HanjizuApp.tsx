@@ -20,6 +20,7 @@ import {
   pathFor,
   prevStep,
   questionFor,
+  heightJoinLogLine,
   railFitLogLine,
   stileExtraLogLine,
   type BoneUse,
@@ -30,6 +31,8 @@ import {
   type FaceWood,
   type FrameKind,
   type FrameWin,
+  type HeightJoin,
+  type HeightJoinMat,
   type JoinKind,
   type MaterialOpt,
   type PanelSides,
@@ -126,6 +129,7 @@ function answerLine(
     return answers.railPitch != null ? `${answers.railPitch}mm` : "";
   }
   if (step === "stileExtra") return stileExtraLogLine(answers, current);
+  if (step === "heightJoin") return heightJoinLogLine(answers, current);
   if (step === "frameKind") return frameKindLogLine(answers, current);
   if (step === "boneUse") return answers.boneUse ?? "";
   if (step === "railKind") return answers.railKind ?? "";
@@ -298,6 +302,13 @@ export function HanjizuApp() {
         stileExtraMat: () => {
           delete next.stileExtraMat;
         },
+        heightJoin: () => {
+          delete next.heightJoin;
+          delete next.heightJoinMat;
+        },
+        heightJoinMat: () => {
+          delete next.heightJoinMat;
+        },
         frameKind: () => {
           delete next.frameKind;
           delete next.sheetFace;
@@ -361,6 +372,8 @@ export function HanjizuApp() {
         delete next.stileExtra;
         delete next.stileExtraN;
         delete next.stileExtraMat;
+        delete next.heightJoin;
+        delete next.heightJoinMat;
         delete next.name;
         delete next.qty;
         delete next.panelId;
@@ -1312,6 +1325,54 @@ export function HanjizuApp() {
                     const next = { ...answers, stileExtraMat: value };
                     setAnswers(next);
                     goTo(nextStep("stileExtraMat", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "heightJoin" ? (
+              <>
+                <p className="now-ask">{questionFor("heightJoin", answers)}</p>
+                <ChoiceRow
+                  choices={[
+                    {
+                      value: "入れる",
+                      label: "追加する",
+                      hint: "3×6 を継ぐので必要",
+                      ready: true,
+                    },
+                  ]}
+                  onPick={(value: HeightJoin) => {
+                    const next = { ...answers, heightJoin: value };
+                    setAnswers(next);
+                    goTo(nextStep("heightJoin", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "heightJoinMat" ? (
+              <>
+                <p className="now-ask">{questionFor("heightJoinMat", answers)}</p>
+                <ChoiceRow
+                  choices={[
+                    {
+                      value: "小割",
+                      label: "小割の平",
+                      hint: "枠と同じ寸面",
+                      ready: true,
+                    },
+                    {
+                      value: "垂木を削る",
+                      label: "垂木を20mmに削る",
+                      hint: "定尺は垂木、成は枠に合わせる",
+                      ready: true,
+                    },
+                  ]}
+                  onPick={(value: HeightJoinMat) => {
+                    const next = { ...answers, heightJoinMat: value };
+                    setAnswers(next);
+                    goTo(nextStep("heightJoinMat", next));
                   }}
                 />
               </>
