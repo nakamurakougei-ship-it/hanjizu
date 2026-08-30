@@ -17,13 +17,13 @@ export function stileCount(members: Member[]): number {
 
 export function materialLabel(
   key: string,
-  quote?: Pick<BundleQuote, "count36" | "count48">,
+  quote?: Pick<BundleQuote, "count36" | "count38" | "count48">,
 ): string {
   const parsed = parseMaterialKey(key);
   if (!parsed) return key;
   const { name, thickness } = parsed;
   if (name.startsWith("小割") || name.startsWith("垂木")) return name;
-  if (/ベニヤ|ランバー/.test(name)) {
+  if (/ベニヤ|ランバー|ポリ板|突板/.test(name)) {
     const stock = sheetStockLabel(quote);
     return stock ? `${thickness}mm${name} ${stock}` : `${thickness}mm${name}`;
   }
@@ -31,13 +31,15 @@ export function materialLabel(
 }
 
 function sheetStockLabel(
-  quote?: Pick<BundleQuote, "count36" | "count48">,
+  quote?: Pick<BundleQuote, "count36" | "count38" | "count48">,
 ): string {
   if (!quote) return "";
-  if (quote.count36 > 0 && quote.count48 > 0) return "";
-  if (quote.count48 > 0) return "4×8";
-  if (quote.count36 > 0) return "3×6";
-  return "";
+  const kinds = [
+    quote.count36 > 0 ? "3×6" : "",
+    quote.count38 > 0 ? "3×8" : "",
+    quote.count48 > 0 ? "4×8" : "",
+  ].filter(Boolean);
+  return kinds.length === 1 ? kinds[0] : "";
 }
 
 export function stockCountText(quote: BundleQuote): string {
@@ -45,11 +47,15 @@ export function stockCountText(quote: BundleQuote): string {
     const n = quote.stickCut.bars.length;
     return n > 0 ? `${n}本` : "定尺に載らない";
   }
-  if (quote.count36 > 0 && quote.count48 > 0) {
-    return `3×6 ${quote.count36}枚 ／ 4×8 ${quote.count48}枚`;
+  const parts: string[] = [];
+  if (quote.count36 > 0) parts.push(`3×6 ${quote.count36}枚`);
+  if (quote.count38 > 0) parts.push(`3×8 ${quote.count38}枚`);
+  if (quote.count48 > 0) parts.push(`4×8 ${quote.count48}枚`);
+  if (parts.length === 1) {
+    const n = quote.count36 + quote.count38 + quote.count48;
+    return `${n}枚`;
   }
-  const n = quote.count36 + quote.count48;
-  return n > 0 ? `${n}枚` : "";
+  return parts.join(" ／ ");
 }
 
 export function quoteAvailableTotal(quotes: BundleQuote[]): {

@@ -14,7 +14,11 @@ export function SheetPreview({
   return (
     <figure className="sheet-fig">
       <figcaption className="parts-key">
-        {sheet.stock.name === "3x6" ? "3×6" : "4×8"}（有効 {sheet.stock.length} ×{" "}
+        {sheet.stock.name === "3x6"
+          ? "3×6"
+          : sheet.stock.name === "3x8"
+            ? "3×8"
+            : "4×8"}（有効 {sheet.stock.length} ×{" "}
         {sheet.stock.width}）
         {"　"}
         {sheet.pieces

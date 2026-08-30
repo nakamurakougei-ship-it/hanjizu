@@ -182,7 +182,10 @@ test("パネルの質問は寸法のあと枠材、向き、それから横桟�
     "boneUse",
     "railKind",
     "railFit",
-    "materials",
+    "faceStock",
+    "faceKind",
+    "faceWood",
+    "faceThick",
     "railPitch",
     "stileExtra",
     "qty",
@@ -195,7 +198,17 @@ test("パネルの質問は寸法のあと枠材、向き、それから横桟�
   assert.equal(nextStep("railFit", allow), "railAllow");
   assert.equal(nextStep("size", tall), "frameKind");
   assert.equal(nextStep("railKind", tall), "railFit");
-  assert.equal(nextStep("railFit", tall), "materials");
+  assert.equal(nextStep("railFit", tall), "faceStock");
+  assert.equal(nextStep("faceStock", tall), "faceKind");
+  assert.equal(
+    pathFor(panelAnswers({ sides: "両面" })).includes("faceSame"),
+    true,
+  );
+  assert.ok(
+    pathFor(
+      panelAnswers({ sides: "両面", faceSame: "いいえ" }),
+    ).includes("faceStockBack"),
+  );
 
   const yokotsukai = panelAnswers({ boneUse: "横使い" });
   assert.equal(pathFor(yokotsukai).includes("railKind"), false);
@@ -359,7 +372,7 @@ test("ジェルトンの枠は定尺2430から本数を出す", () => {
   assert.equal(cut.unfit.length, 0);
 });
 
-test("横幅が3×6を超えるときだけ面材の定尺を聞く。その直後に縦残。縦長超えは聞かない", () => {
+test("横幅が3×6を超えるときは定尺のあと面材の種類、それから縦残。縦長超えは聞かない", () => {
   assert.equal(asksFaceStock(panelAnswers()), false);
   assert.equal(asksFaceStock(panelAnswers({ width: 1800, height: 900 })), false);
   assert.equal(asksFaceStock(panelAnswers({ width: 900, height: 2000 })), false);
@@ -367,12 +380,13 @@ test("横幅が3×6を超えるときだけ面材の定尺を聞く。その直�
   assert.equal(asksFaceStock(over), true);
   assert.ok(pathFor(over).includes("faceStock"));
   assert.match(questionFor("faceStock", over), /910mm/);
-  assert.match(questionFor("faceStock", over), /3×6と4×8/);
+  assert.match(questionFor("faceStock", over), /3×8/);
   assert.equal(nextStep("railFit", over), "faceStock");
-  assert.equal(nextStep("faceStock", over), "stileExtra");
+  assert.equal(nextStep("faceStock", over), "faceKind");
+  assert.equal(nextStep("faceThick", over), "stileExtra");
   assert.equal(nextStep("stileExtra", over), "stileExtraN");
   assert.equal(nextStep("stileExtraN", over), "stileExtraMat");
-  assert.equal(nextStep("stileExtraMat", over), "materials");
+  assert.equal(nextStep("stileExtraMat", over), "railPitch");
   assert.equal(nextStep("railPitch", over), "qty");
   assert.equal(extraStileColumns(over), 0);
   assert.equal(extraStileColumns({ ...over, stileExtraN: 1 }), 1);
@@ -463,7 +477,7 @@ test("1200×1800を3×6で作ると巾だけ分割する", () => {
     panelAnswers({
       width: 1200,
       height: 1800,
-      faceStock: "4×8込み",
+      faceStock: "4×8",
     }),
   ).find((item) => item.name === "面材 表");
   assert.equal(whole?.length, 1800);

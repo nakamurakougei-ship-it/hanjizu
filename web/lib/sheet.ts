@@ -1,5 +1,5 @@
 import type { Member } from "./model";
-import { fitsOn, USABLE_36, USABLE_48, type SheetSize } from "./stock";
+import { fitsOn, USABLE_36, USABLE_38, USABLE_48, type SheetSize } from "./stock";
 
 export function sheetForPiece(
   length: number,
@@ -7,6 +7,7 @@ export function sheetForPiece(
   canRotate: boolean,
 ): SheetSize | null {
   if (fitsOn(length, width, USABLE_36, canRotate)) return USABLE_36;
+  if (fitsOn(length, width, USABLE_38, canRotate)) return USABLE_38;
   if (fitsOn(length, width, USABLE_48, canRotate)) return USABLE_48;
   return null;
 }
@@ -155,30 +156,47 @@ function packOnto(
   };
 }
 
+function stockOfHint(hint: Member["stockHint"]): SheetSize {
+  if (hint === "3x8") return USABLE_38;
+  if (hint === "4x8") return USABLE_48;
+  return USABLE_36;
+}
+
 /** 同じ定尺に載る部材を仮詰め。行割り・余り詰めの本実装はイタドリ移植。 */
 export function packFaceSheets(members: Member[]): {
   sheets: PackedSheet[];
   unfit: LoosePiece[];
 } {
-  const pieces = expandMembers(members);
-  const on36: LoosePiece[] = [];
-  const rest: LoosePiece[] = [];
-  for (const piece of pieces) {
-    if (fitsOn(piece.length, piece.width, USABLE_36, piece.canRotate)) {
-      on36.push(piece);
-    } else {
-      rest.push(piece);
-    }
+  const byHint = new Map<NonNullable<Member["stockHint"]> | "3x6", Member[]>();
+  for (const item of members) {
+    const hint = item.stockHint ?? "3x6";
+    const list = byHint.get(hint) ?? [];
+    list.push(item);
+    byHint.set(hint, list);
   }
-  const packed36 = packOnto(on36, USABLE_36);
-  const packed48 = packOnto(
-    [...rest, ...packed36.leftover],
-    USABLE_48,
-  );
-  return {
-    sheets: [...packed36.sheets, ...packed48.sheets],
-    unfit: packed48.leftover,
-  };
+  const sheets: PackedSheet[] = [];
+  const unfit: LoosePiece[] = [];
+  const order: Array<NonNullable<Member["stockHint"]>> = ["3x6", "3x8", "4x8"];
+  for (const hint of order) {
+    const group = byHint.get(hint);
+    if (!group || group.length === 0) continue;
+    const preferred = stockOfHint(hint);
+    const rest = [USABLE_36, USABLE_38, USABLE_48].filter(
+      (stock) => stock.name !== preferred.name,
+    );
+    let leftover = expandMembers(group);
+    const first = packOnto(leftover, preferred);
+    sheets.push(...first.sheets);
+    leftover = first.leftover;
+    for (const stock of rest) {
+      if (leftover.length === 0) break;
+      const packed = packOnto(leftover, stock);
+      sheets.push(...packed.sheets);
+      leftover = packed.leftover;
+    }
+    unfit.push(...leftover);
+  }
+  return { sheets, unfit };
 }
 
 export function shortFaceLabel(fullName: string, panelName: string): string {

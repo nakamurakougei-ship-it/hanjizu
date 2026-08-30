@@ -152,13 +152,14 @@ test("使用材の表示は枠材が本、ベニヤは厚み＋名前＋定尺",
   assert.equal(materialLabel("小割 20×30 30"), "小割 20×30");
   assert.equal(materialLabel("ラワンベニヤ 3"), "3mmラワンベニヤ");
   assert.equal(
-    materialLabel("ラワンベニヤ 3", { count36: 1, count48: 0 }),
+    materialLabel("ラワンベニヤ 3", { count36: 1, count38: 0, count48: 0 }),
     "3mmラワンベニヤ 3×6",
   );
   const stick: BundleQuote = {
     key: "小割 20×30 30",
     yen: null,
     count36: 0,
+    count38: 0,
     count48: 0,
     meters: 0,
     stickCut: {
@@ -176,6 +177,7 @@ test("使用材の表示は枠材が本、ベニヤは厚み＋名前＋定尺",
     key: "ラワンベニヤ 3",
     yen: 1380,
     count36: 1,
+    count38: 0,
     count48: 0,
     meters: 0,
   };
@@ -184,11 +186,12 @@ test("使用材の表示は枠材が本、ベニヤは厚み＋名前＋定尺",
     key: "ラワンベニヤ 3",
     yen: 2760,
     count36: 0,
+    count38: 0,
     count48: 1,
     meters: 0,
   };
   assert.equal(
-    materialLabel("ラワンベニヤ 3", { count36: 0, count48: 1 }),
+    materialLabel("ラワンベニヤ 3", { count36: 0, count38: 0, count48: 1 }),
     "3mmラワンベニヤ 4×8",
   );
   assert.equal(stockCountText(sheet48), "1枚");

@@ -56,6 +56,7 @@ export type Member = {
   qty: number;
   joint: "t-joint" | "straight";
   canRotate: boolean;
+  stockHint?: "3x6" | "3x8" | "4x8";
 };
 
 export type MaterialKeyParts = {

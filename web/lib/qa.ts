@@ -47,9 +47,33 @@ export type FrameWin = "縦勝ち" | "横勝ち";
 export type PanelSides = "片面" | "両面";
 export type SheetUse = "厚み" | "割き";
 export type RailFit = "寸面通り" | "余裕";
-export type FaceStock = "3×6" | "4×8込み";
+export type FaceStock = "3×6" | "3×8" | "4×8";
+export type FaceSame = "はい" | "いいえ";
+export type FaceKind = "ベニヤ" | "ランバー";
+export type FaceWood = "ラワン" | "突板" | "ポリ板" | "ランバー";
 export type StileExtra = "入れる" | "入れない";
 export type StileExtraMat = "小割" | "垂木" | "垂木を削る";
+
+export const FACE_STOCK_OPTS = ["3×6", "3×8", "4×8"] as const;
+export const FACE_KIND_OPTS = ["ベニヤ", "ランバー"] as const;
+export const FACE_WOOD_OPTS = ["ラワン", "突板", "ポリ板", "ランバー"] as const;
+export const FACE_THICK_OPTS = [2.5, 3, 4, 5.5, 9, 12, 15, 18, 21, 24, 30] as const;
+
+export function faceMaterialName(
+  kind: FaceKind = "ベニヤ",
+  wood: FaceWood = "ラワン",
+): string {
+  if (wood === "ポリ板") return "ポリ板";
+  if (wood === "突板") return kind === "ランバー" ? "突板ランバー" : "突板ベニヤ";
+  if (wood === "ランバー") return kind === "ベニヤ" ? "ランバーベニヤ" : "ランバー";
+  return kind === "ランバー" ? "ラワンランバー" : "ラワンベニヤ";
+}
+
+export function stockHintOf(stock: FaceStock | undefined): "3x6" | "3x8" | "4x8" {
+  if (stock === "3×8") return "3x8";
+  if (stock === "4×8") return "4x8";
+  return "3x6";
+}
 
 export type QaAnswers = {
   product?: ProductKind;
@@ -68,6 +92,14 @@ export type QaAnswers = {
   railAllow?: number;
   railPitch?: number;
   faceStock?: FaceStock;
+  faceSame?: FaceSame;
+  faceKind?: FaceKind;
+  faceWood?: FaceWood;
+  faceThick?: number;
+  faceStockBack?: FaceStock;
+  faceKindBack?: FaceKind;
+  faceWoodBack?: FaceWood;
+  faceThickBack?: number;
   stileExtra?: StileExtra;
   stileExtraN?: number;
   stileExtraMat?: StileExtraMat;
@@ -94,6 +126,14 @@ export type StepId =
   | "railFit"
   | "railAllow"
   | "faceStock"
+  | "faceSame"
+  | "faceKind"
+  | "faceWood"
+  | "faceThick"
+  | "faceStockBack"
+  | "faceKindBack"
+  | "faceWoodBack"
+  | "faceThickBack"
   | "railPitch"
   | "stileExtra"
   | "stileExtraN"
@@ -128,11 +168,41 @@ export function asksRailPitch(answers: QaAnswers): boolean {
   return isSheetKind(answers.frameKind) && answers.sheetUse === "割き";
 }
 
-/** 横幅が 3×6 の巾を超えるときだけ。縦が 3×6 の長さを超えるのは別枝。 */
+/** 横幅が 3×6 の巾を超えるとき。縦が 3×6 の長さを超えるのは別枝。 */
 export function asksFaceStock(answers: QaAnswers): boolean {
   if (answers.product !== "パネル") return false;
   if (answers.width <= USABLE_36.width) return false;
   return !fitsOn(answers.height, answers.width, USABLE_36, true);
+}
+
+/** 小割・垂木の面材。定尺・種類・厚みを聞く。 */
+export function asksFaceMaterials(answers: QaAnswers): boolean {
+  return answers.product === "パネル" && isStickKind(answers.frameKind);
+}
+
+export function faceSidesDiffer(answers: QaAnswers): boolean {
+  return answers.sides === "両面" && answers.faceSame === "いいえ";
+}
+
+function faceStockQuestion(wide: boolean, side?: "表" | "裏"): string {
+  const who = side ? `${side}の` : "";
+  return wide
+    ? `横幅が910mmを超えるので確認です。${who}面材は3×6と3×8と4×8のどれを使いますか？`
+    : `${who}面材は何を使いますか？`;
+}
+
+function pushFaceMaterialSteps(path: StepId[], answers: QaAnswers) {
+  if (answers.sides === "両面") path.push("faceSame");
+  path.push("faceStock");
+  path.push("faceKind");
+  path.push("faceWood");
+  path.push("faceThick");
+  if (faceSidesDiffer(answers)) {
+    path.push("faceStockBack");
+    path.push("faceKindBack");
+    path.push("faceWoodBack");
+    path.push("faceThickBack");
+  }
 }
 
 /** 小割枠で中の縦残を入れるときだけ、何を使うかを聞く。 */
@@ -168,11 +238,10 @@ export function pathFor(answers: QaAnswers): StepId[] {
   }
   path.push("railFit");
   if (answers.railFit === "余裕") path.push("railAllow");
-  if (asksFaceStock(answers)) path.push("faceStock");
+  if (asksFaceMaterials(answers)) pushFaceMaterialSteps(path, answers);
   if (asksFaceStock(answers) && asksRailPitch(answers)) {
     pushStileExtraSteps(path, answers);
   }
-  if (isStickKind(answers.frameKind)) path.push("materials");
   if (asksRailPitch(answers)) {
     path.push("railPitch");
     if (!asksFaceStock(answers)) pushStileExtraSteps(path, answers);
@@ -227,9 +296,15 @@ export function questionFor(step: StepId, answers: QaAnswers): string {
   if (step === "railFit") return "横桟の長さは、枠材の寸面通りですか。余裕を設けますか。";
   if (step === "railAllow") return "横桟の余裕は、何ミリですか。";
   if (step === "railPitch") return "横桟の間隔は、何ミリですか。";
-  if (step === "faceStock") {
-    return "横幅が910mmを超えるので確認です。面材は3×6と4×8のどちらを使いますか？";
-  }
+  if (step === "faceSame") return "両面とも同じ面材を使いますか？";
+  if (step === "faceStock") return faceStockQuestion(asksFaceStock(answers));
+  if (step === "faceKind") return "面材は、ベニヤですか。ランバーですか。";
+  if (step === "faceWood") return "面材は、ラワン・突板・ポリ板・ランバーのどれですか。";
+  if (step === "faceThick") return "面材の厚みは、何ミリですか。";
+  if (step === "faceStockBack") return faceStockQuestion(asksFaceStock(answers), "裏");
+  if (step === "faceKindBack") return "裏の面材は、ベニヤですか。ランバーですか。";
+  if (step === "faceWoodBack") return "裏の面材は、ラワン・突板・ポリ板・ランバーのどれですか。";
+  if (step === "faceThickBack") return "裏の面材の厚みは、何ミリですか。";
   if (step === "stileExtra") return "中に縦残を追加しますか？";
   if (step === "stileExtraN") return "縦残は何列入れますか？";
   if (step === "stileExtraMat") {
@@ -275,6 +350,14 @@ export const STEP_TITLES: Record<Exclude<StepId, "done">, string> = {
   railFit: "横桟の長さ",
   railAllow: "横桟の余裕",
   faceStock: "面材の定尺",
+  faceSame: "表裏の面材",
+  faceKind: "面材の種類",
+  faceWood: "面材の木",
+  faceThick: "面材の厚み",
+  faceStockBack: "裏の定尺",
+  faceKindBack: "裏の種類",
+  faceWoodBack: "裏の木",
+  faceThickBack: "裏の厚み",
   railPitch: "横桟の間隔",
   stileExtra: "縦残",
   stileExtraN: "縦残の列数",
@@ -311,6 +394,13 @@ const FOLDED_FRAME_STEPS: ReadonlySet<StepId> = new Set([
   "railAllow",
   "stileExtraN",
   "stileExtraMat",
+  "faceKind",
+  "faceWood",
+  "faceThick",
+  "faceStockBack",
+  "faceKindBack",
+  "faceWoodBack",
+  "faceThickBack",
   "morePanels",
 ]);
 
@@ -384,4 +474,45 @@ export function stileExtraLogLine(answers: QaAnswers, current: StepId): string {
   }
   if (bits.length > 0) return bits.join(" ");
   return "追加する";
+}
+
+function facePickLine(
+  stock?: FaceStock,
+  kind?: FaceKind,
+  wood?: FaceWood,
+  thick?: number,
+): string {
+  const bits: string[] = [];
+  if (stock) bits.push(stock);
+  if (kind) bits.push(kind);
+  if (wood) bits.push(wood);
+  if (thick != null) bits.push(`${thick}mm`);
+  return bits.join(" ");
+}
+
+export function faceLogLine(answers: QaAnswers, current: StepId): string {
+  if (answers.faceSame === "いいえ") {
+    const front = facePickLine(
+      answers.faceStock,
+      answers.faceKind,
+      answers.faceWood,
+      answers.faceThick,
+    );
+    const back = facePickLine(
+      answers.faceStockBack,
+      answers.faceKindBack,
+      answers.faceWoodBack,
+      answers.faceThickBack,
+    );
+    if (front && back && stepAlreadyDecided("faceThickBack", current, answers)) {
+      return `表 ${front} ／ 裏 ${back}`;
+    }
+    if (front) return `表 ${front}`;
+  }
+  return facePickLine(
+    answers.faceStock,
+    stepAlreadyDecided("faceKind", current, answers) ? answers.faceKind : undefined,
+    stepAlreadyDecided("faceWood", current, answers) ? answers.faceWood : undefined,
+    stepAlreadyDecided("faceThick", current, answers) ? answers.faceThick : undefined,
+  );
 }

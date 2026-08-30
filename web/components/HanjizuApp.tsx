@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from "react";
 import {
-  FACE_MATERIAL_OPTS,
+  FACE_KIND_OPTS,
+  FACE_STOCK_OPTS,
+  FACE_THICK_OPTS,
+  FACE_WOOD_OPTS,
   FRAME_KINDS,
   MATERIAL_OPTS,
   SHEET_FACES,
   STEP_TITLES,
   asksFaceStock,
   defaultAnswers,
+  faceLogLine,
+  faceMaterialName,
   frameKindLogLine,
   logSteps,
   nextStep,
@@ -19,13 +24,16 @@ import {
   stileExtraLogLine,
   type BoneUse,
   type FaceBuild,
+  type FaceKind,
+  type FaceSame,
+  type FaceStock,
+  type FaceWood,
   type FrameKind,
   type FrameWin,
   type JoinKind,
   type MaterialOpt,
   type PanelSides,
   type QaAnswers,
-  type FaceStock,
   type RailFit,
   type StileExtra,
   type StileExtraMat,
@@ -112,7 +120,8 @@ function answerLine(
     return `${answers.width} × ${answers.depth} × ${answers.height} mm`;
   }
   if (step === "railFit") return railFitLogLine(answers, current);
-  if (step === "faceStock") return answers.faceStock ?? "";
+  if (step === "faceSame") return answers.faceSame ?? "";
+  if (step === "faceStock") return faceLogLine(answers, current);
   if (step === "railPitch") {
     return answers.railPitch != null ? `${answers.railPitch}mm` : "";
   }
@@ -124,7 +133,11 @@ function answerLine(
   if (step === "sheetUse") {
     return answers.sheetUse === "割き" ? "割いた幅を厚みにする" : answers.sheetUse === "厚み" ? "厚みを使う" : "";
   }
-  if (step === "materials") return `${answers.faceMaterial ?? ""} 3mm`;
+  if (step === "materials") {
+    return answers.faceMaterial
+      ? `${answers.faceThick ?? 3}mm${answers.faceMaterial}`
+      : "";
+  }
   if (step === "qty") {
     return answers.qty != null ? `${answers.qty}枚` : "";
   }
@@ -222,8 +235,57 @@ export function HanjizuApp() {
         railPitch: () => {
           delete next.railPitch;
         },
+        faceSame: () => {
+          delete next.faceSame;
+          delete next.faceStock;
+          delete next.faceKind;
+          delete next.faceWood;
+          delete next.faceThick;
+          delete next.faceStockBack;
+          delete next.faceKindBack;
+          delete next.faceWoodBack;
+          delete next.faceThickBack;
+          delete next.faceMaterial;
+        },
         faceStock: () => {
           delete next.faceStock;
+          delete next.faceKind;
+          delete next.faceWood;
+          delete next.faceThick;
+          delete next.faceMaterial;
+        },
+        faceKind: () => {
+          delete next.faceKind;
+          delete next.faceWood;
+          delete next.faceThick;
+          delete next.faceMaterial;
+        },
+        faceWood: () => {
+          delete next.faceWood;
+          delete next.faceThick;
+          delete next.faceMaterial;
+        },
+        faceThick: () => {
+          delete next.faceThick;
+          delete next.faceMaterial;
+        },
+        faceStockBack: () => {
+          delete next.faceStockBack;
+          delete next.faceKindBack;
+          delete next.faceWoodBack;
+          delete next.faceThickBack;
+        },
+        faceKindBack: () => {
+          delete next.faceKindBack;
+          delete next.faceWoodBack;
+          delete next.faceThickBack;
+        },
+        faceWoodBack: () => {
+          delete next.faceWoodBack;
+          delete next.faceThickBack;
+        },
+        faceThickBack: () => {
+          delete next.faceThickBack;
         },
         stileExtra: () => {
           delete next.stileExtra;
@@ -284,6 +346,14 @@ export function HanjizuApp() {
         delete next.sheetUse;
         delete next.sides;
         delete next.faceMaterial;
+        delete next.faceSame;
+        delete next.faceKind;
+        delete next.faceWood;
+        delete next.faceThick;
+        delete next.faceStockBack;
+        delete next.faceKindBack;
+        delete next.faceWoodBack;
+        delete next.faceThickBack;
         delete next.railFit;
         delete next.railAllow;
         delete next.railPitch;
@@ -691,31 +761,184 @@ export function HanjizuApp() {
               </form>
             ) : null}
 
-            {step === "faceStock" ? (
+            {step === "faceSame" ? (
               <>
-                <p className="now-ask">
-                  横幅が910mmを超えるので確認です。
-                  <br />
-                  面材は3×6と4×8のどちらを使いますか？
-                </p>
+                <p className="now-ask">{questionFor("faceSame", answers)}</p>
                 <ChoiceRow
                   choices={[
-                    {
-                      value: "3×6",
-                      label: "3×6",
-                      hint: "縦の継ぎと繋ぎ材",
-                      ready: true,
-                    },
-                    {
-                      value: "4×8込み",
-                      label: "4×8",
-                      ready: true,
-                    },
+                    { value: "はい", label: "はい", hint: "表裏同じ", ready: true },
+                    { value: "いいえ", label: "いいえ", hint: "表裏で分ける", ready: true },
                   ]}
+                  onPick={(value: FaceSame) => {
+                    const next = { ...answers, faceSame: value };
+                    if (value === "はい") {
+                      delete next.faceStockBack;
+                      delete next.faceKindBack;
+                      delete next.faceWoodBack;
+                      delete next.faceThickBack;
+                    }
+                    setAnswers(next);
+                    goTo(nextStep("faceSame", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "faceStock" ? (
+              <>
+                <p className="now-ask">{questionFor("faceStock", answers)}</p>
+                <ChoiceRow
+                  choices={FACE_STOCK_OPTS.map((value) => ({
+                    value,
+                    label: value,
+                    hint:
+                      value === "3×6"
+                        ? "910×1820"
+                        : value === "3×8"
+                          ? "910×2430"
+                          : "1210×2430",
+                    ready: true,
+                  }))}
                   onPick={(value: FaceStock) => {
                     const next = { ...answers, faceStock: value };
                     setAnswers(next);
                     goTo(nextStep("faceStock", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "faceKind" ? (
+              <>
+                <p className="now-ask">{questionFor("faceKind", answers)}</p>
+                <ChoiceRow
+                  choices={FACE_KIND_OPTS.map((value) => ({
+                    value,
+                    label: value,
+                    ready: true,
+                  }))}
+                  onPick={(value: FaceKind) => {
+                    const next = { ...answers, faceKind: value };
+                    setAnswers(next);
+                    goTo(nextStep("faceKind", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "faceWood" ? (
+              <>
+                <p className="now-ask">{questionFor("faceWood", answers)}</p>
+                <ChoiceRow
+                  choices={FACE_WOOD_OPTS.map((value) => ({
+                    value,
+                    label: value,
+                    ready: true,
+                  }))}
+                  onPick={(value: FaceWood) => {
+                    const next = { ...answers, faceWood: value };
+                    setAnswers(next);
+                    goTo(nextStep("faceWood", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "faceThick" ? (
+              <>
+                <p className="now-ask">{questionFor("faceThick", answers)}</p>
+                <ChoiceRow
+                  wide
+                  choices={FACE_THICK_OPTS.map((n) => ({
+                    value: String(n),
+                    label: `${n}`,
+                    ready: true,
+                  }))}
+                  onPick={(value: string) => {
+                    const thick = Number(value);
+                    const next = {
+                      ...answers,
+                      faceThick: thick,
+                      faceMaterial: faceMaterialName(
+                        answers.faceKind,
+                        answers.faceWood,
+                      ),
+                    };
+                    setAnswers(next);
+                    goTo(nextStep("faceThick", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "faceStockBack" ? (
+              <>
+                <p className="now-ask">{questionFor("faceStockBack", answers)}</p>
+                <ChoiceRow
+                  choices={FACE_STOCK_OPTS.map((value) => ({
+                    value,
+                    label: value,
+                    ready: true,
+                  }))}
+                  onPick={(value: FaceStock) => {
+                    const next = { ...answers, faceStockBack: value };
+                    setAnswers(next);
+                    goTo(nextStep("faceStockBack", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "faceKindBack" ? (
+              <>
+                <p className="now-ask">{questionFor("faceKindBack", answers)}</p>
+                <ChoiceRow
+                  choices={FACE_KIND_OPTS.map((value) => ({
+                    value,
+                    label: value,
+                    ready: true,
+                  }))}
+                  onPick={(value: FaceKind) => {
+                    const next = { ...answers, faceKindBack: value };
+                    setAnswers(next);
+                    goTo(nextStep("faceKindBack", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "faceWoodBack" ? (
+              <>
+                <p className="now-ask">{questionFor("faceWoodBack", answers)}</p>
+                <ChoiceRow
+                  choices={FACE_WOOD_OPTS.map((value) => ({
+                    value,
+                    label: value,
+                    ready: true,
+                  }))}
+                  onPick={(value: FaceWood) => {
+                    const next = { ...answers, faceWoodBack: value };
+                    setAnswers(next);
+                    goTo(nextStep("faceWoodBack", next));
+                  }}
+                />
+              </>
+            ) : null}
+
+            {step === "faceThickBack" ? (
+              <>
+                <p className="now-ask">{questionFor("faceThickBack", answers)}</p>
+                <ChoiceRow
+                  wide
+                  choices={FACE_THICK_OPTS.map((n) => ({
+                    value: String(n),
+                    label: `${n}`,
+                    ready: true,
+                  }))}
+                  onPick={(value: string) => {
+                    const next = { ...answers, faceThickBack: Number(value) };
+                    setAnswers(next);
+                    goTo(nextStep("faceThickBack", next));
                   }}
                 />
               </>
@@ -934,21 +1157,6 @@ export function HanjizuApp() {
                   }}
                 />
               </>
-            ) : null}
-
-            {step === "materials" ? (
-              <ChoiceRow
-                choices={FACE_MATERIAL_OPTS.map((name) => ({
-                  value: name,
-                  label: `${name} 3mm`,
-                  ready: true,
-                }))}
-                onPick={(value: string) => {
-                  const next = { ...answers, faceMaterial: value };
-                  setAnswers(next);
-                  goTo(nextStep("materials", next));
-                }}
-              />
             ) : null}
 
             {step === "railPitch" ? (

@@ -1,4 +1,4 @@
-import { USABLE_36, USABLE_48, fitsOn } from "./stock";
+import { USABLE_36, USABLE_38, USABLE_48, fitsOn } from "./stock";
 import { boardKindOf, linearStockLength, type SheetKind } from "./catalog";
 import type { Member } from "./model";
 import { packSticks, piecesFromMembers, type StickCut } from "./stickCut";
@@ -18,6 +18,7 @@ export type BundleQuote = {
   key: string;
   yen: number | null;
   count36: number;
+  count38: number;
   count48: number;
   meters: number;
   note?: string;
@@ -118,6 +119,7 @@ export function quoteBundle(
       key,
       yen: null,
       count36: 0,
+      count38: 0,
       count48: 0,
       meters,
       stickCut,
@@ -126,39 +128,82 @@ export function quoteBundle(
   }
 
   if (!parsed) {
-    return { key, yen: null, count36: 0, count48: 0, meters, note: "材料キーが読めない" };
+    return {
+      key,
+      yen: null,
+      count36: 0,
+      count38: 0,
+      count48: 0,
+      meters,
+      note: "材料キーが読めない",
+    };
+  }
+
+  const hint = members.find((item) => item.stockHint)?.stockHint;
+  const area = members.reduce((sum, item) => sum + pieceArea(item), 0);
+  const a36 = USABLE_36.length * USABLE_36.width;
+  const a38 = USABLE_38.length * USABLE_38.width;
+  const a48 = USABLE_48.length * USABLE_48.width;
+  const n36 = allFit(members, USABLE_36) ? Math.max(1, Math.ceil(area / a36)) : 0;
+  const n38 = allFit(members, USABLE_38) ? Math.max(1, Math.ceil(area / a38)) : 0;
+  const n48 = allFit(members, USABLE_48) ? Math.max(1, Math.ceil(area / a48)) : 0;
+
+  if (hint === "3x8") {
+    return {
+      key,
+      yen: null,
+      count36: 0,
+      count38: n38,
+      count48: 0,
+      meters,
+      note:
+        n38 > 0
+          ? "3×8の単価は台帳にまだない"
+          : "定尺に載らない",
+    };
   }
 
   const row = findLedgerRow(rows, parsed.name, parsed.thickness);
   if (!row) {
-    return { key, yen: null, count36: 0, count48: 0, meters, note: "この事業所の台帳に無い" };
+    return {
+      key,
+      yen: null,
+      count36: hint === "4x8" ? 0 : n36,
+      count38: 0,
+      count48: hint === "4x8" ? n48 : 0,
+      meters,
+      note: "台帳に合致する企画がありません",
+    };
   }
 
-  const area = members.reduce((sum, item) => sum + pieceArea(item), 0);
-  const a36 = USABLE_36.length * USABLE_36.width;
-  const a48 = USABLE_48.length * USABLE_48.width;
-  const n36 = allFit(members, USABLE_36) ? Math.max(1, Math.ceil(area / a36)) : 0;
-  const n48 = allFit(members, USABLE_48) ? Math.max(1, Math.ceil(area / a48)) : 0;
-
-  const candidates: { count36: number; count48: number; yen: number }[] = [];
-  if (n36 > 0 && row.price36 != null) {
-    candidates.push({ count36: n36, count48: 0, yen: n36 * row.price36 });
+  const candidates: { count36: number; count38: number; count48: number; yen: number }[] =
+    [];
+  if (hint !== "4x8" && n36 > 0 && row.price36 != null) {
+    candidates.push({ count36: n36, count38: 0, count48: 0, yen: n36 * row.price36 });
   }
-  if (n48 > 0 && row.price48 != null) {
-    candidates.push({ count36: 0, count48: n48, yen: n48 * row.price48 });
+  if (hint !== "3x6" && n48 > 0 && row.price48 != null) {
+    candidates.push({ count36: 0, count38: 0, count48: n48, yen: n48 * row.price48 });
   }
   if (candidates.length === 0) {
     return {
       key,
       yen: null,
-      count36: n36,
-      count48: n48,
+      count36: hint === "4x8" ? 0 : n36,
+      count38: 0,
+      count48: hint === "3x6" ? 0 : n48,
       meters,
       note: "定尺単価が空、または定尺に載らない",
     };
   }
   const best = candidates.reduce((a, b) => (a.yen <= b.yen ? a : b));
-  return { key, yen: best.yen, count36: best.count36, count48: best.count48, meters };
+  return {
+    key,
+    yen: best.yen,
+    count36: best.count36,
+    count38: best.count38,
+    count48: best.count48,
+    meters,
+  };
 }
 
 export function quoteTotal(quotes: BundleQuote[]): number | null {

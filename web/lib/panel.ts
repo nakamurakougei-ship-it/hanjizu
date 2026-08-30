@@ -11,8 +11,16 @@ import {
   type StickKind,
 } from "./catalog";
 import type { Member } from "./model";
-import { asksFaceStock, type QaAnswers } from "./qa";
+import {
+  asksFaceStock,
+  faceMaterialName,
+  faceSidesDiffer,
+  stockHintOf,
+  type FaceStock,
+  type QaAnswers,
+} from "./qa";
 import { splitByPanelWidth } from "./split";
+import { USABLE_36, USABLE_38, USABLE_48 } from "./stock";
 
 export { KOGARA, TARUKI };
 
@@ -134,21 +142,60 @@ function pushExtraStiles(
   );
 }
 
+export function faceSpecOf(
+  answers: QaAnswers,
+  side: "front" | "back",
+): { stock: FaceStock; material: string; thick: number } {
+  const differ = faceSidesDiffer(answers);
+  const back = side === "back" && differ;
+  return {
+    stock: (back ? answers.faceStockBack : answers.faceStock) ?? "3×6",
+    material: faceMaterialName(
+      back ? answers.faceKindBack : answers.faceKind,
+      back ? answers.faceWoodBack : answers.faceWood,
+    ),
+    thick: (back ? answers.faceThickBack : answers.faceThick) ?? PANEL_FACE_T_MM,
+  };
+}
+
+function stockUsableWidth(stock: FaceStock): number {
+  if (stock === "3×8") return USABLE_38.width;
+  if (stock === "4×8") return USABLE_48.width;
+  return USABLE_36.width;
+}
+
 function pushFaces(
   out: Member[],
   answers: QaAnswers,
   height: number,
   width: number,
 ): void {
-  const faceMat = answers.faceMaterial ?? "ラワンベニヤ";
-  const faces = [skin("panel-face", "面材 表", height, width, faceMat)];
+  const front = faceSpecOf(answers, "front");
+  const faces = [
+    skin("panel-face", "面材 表", height, width, front.material, front.thick, front.stock),
+  ];
   if (answers.sides === "両面") {
-    faces.push(skin("panel-face-back", "面材 裏", height, width, faceMat));
+    const back = faceSpecOf(answers, "back");
+    faces.push(
+      skin(
+        "panel-face-back",
+        "面材 裏",
+        height,
+        width,
+        back.material,
+        back.thick,
+        back.stock,
+      ),
+    );
   }
   out.push(
-    ...(answers.faceStock === "3×6"
-      ? splitByPanelWidth(faces, width, height)
-      : faces),
+    ...faces.flatMap((item) => {
+      const hint = item.stockHint;
+      const stock: FaceStock =
+        hint === "3x8" ? "3×8" : hint === "4x8" ? "4×8" : "3×6";
+      const maxW = stockUsableWidth(stock);
+      return width > maxW ? splitByPanelWidth([item], width, height, maxW) : [item];
+    }),
   );
 }
 
@@ -206,7 +253,16 @@ function pushMidRails(
   }
 }
 
-function skin(id: string, name: string, length: number, width: number, material: string): Member {
+function skin(
+  id: string,
+  name: string,
+  length: number,
+  width: number,
+  material: string,
+  thick: number = PANEL_FACE_T_MM,
+  stock?: FaceStock,
+): Member {
+  const keyThick = Number.isInteger(thick) ? String(thick) : String(thick);
   return {
     id,
     name,
@@ -215,12 +271,13 @@ function skin(id: string, name: string, length: number, width: number, material:
     role: "core",
     length: Math.max(length, width),
     width: Math.min(length, width),
-    thickness: PANEL_FACE_T_MM,
+    thickness: thick,
     construction: "plywood",
-    materialKey: `${material} ${PANEL_FACE_T_MM}`,
+    materialKey: `${material} ${keyThick}`,
     qty: 1,
     joint: "t-joint",
     canRotate: true,
+    stockHint: stockHintOf(stock),
   };
 }
 
@@ -247,9 +304,8 @@ function boardPanel(answers: QaAnswers): Member[] {
     joint: "straight",
     canRotate: true,
   };
-  return answers.faceStock === "3×6"
-    ? splitByPanelWidth([core], W, H)
-    : [core];
+  const maxW = stockUsableWidth(answers.faceStock ?? "3×6");
+  return W > maxW ? splitByPanelWidth([core], W, H, maxW) : [core];
 }
 
 function frameSticks(
@@ -512,6 +568,19 @@ export function panelSkinCount(answers: QaAnswers): number {
   return answers.sides === "両面" ? 2 : 1;
 }
 
+export function faceThicknessOf(
+  answers: QaAnswers,
+  side: "front" | "back",
+): number {
+  if (isSheetKind(answers.frameKind) && answers.sheetUse !== "割き") return 0;
+  if (side === "back" && answers.sides !== "両面") return 0;
+  return faceSpecOf(answers, side).thick;
+}
+
 export function panelFinishThickness(answers: QaAnswers): number {
-  return panelSei(answers) + PANEL_FACE_T_MM * panelSkinCount(answers);
+  return (
+    panelSei(answers) +
+    faceThicknessOf(answers, "front") +
+    faceThicknessOf(answers, "back")
+  );
 }

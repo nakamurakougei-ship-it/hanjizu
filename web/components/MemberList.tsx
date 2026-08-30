@@ -78,6 +78,13 @@ export function MemberList({
             );
           })}
         </ul>
+        {quotes
+          .filter((quote) => quote.note)
+          .map((quote) => (
+            <p key={`${quote.key}-note`} className="sheet-note">
+              {materialLabel(quote.key, quote)}：{quote.note}
+            </p>
+          ))}
         <p className="parts-total">
           {total.yen != null ? yenText(total.yen) : "金額は台帳が揃い次第"}
           {total.yen != null && total.missing
