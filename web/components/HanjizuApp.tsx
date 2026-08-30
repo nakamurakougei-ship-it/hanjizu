@@ -694,19 +694,21 @@ export function HanjizuApp() {
             {step === "faceStock" ? (
               <>
                 <p className="now-ask">
-                  横幅が 3×6 を超えるので、面材は 3×6 で作りますか。4×8 も含めますか。
+                  横幅が910mmを超えるので確認です。
+                  <br />
+                  面材は3×6と4×8のどちらを使いますか？
                 </p>
                 <ChoiceRow
                   choices={[
                     {
                       value: "3×6",
-                      label: "3×6で作る",
+                      label: "3×6",
                       hint: "縦の継ぎと繋ぎ材",
                       ready: true,
                     },
                     {
                       value: "4×8込み",
-                      label: "4×8も含める",
+                      label: "4×8",
                       ready: true,
                     },
                   ]}

@@ -1,0 +1,11 @@
+---
+description: UI 確認は localhost の Browser Tab ではなくデプロイ後
+alwaysApply: true
+---
+
+Cursor の Browser Tab が固まる間は、localhost で UI を確認しない。
+
+- `browser_tabs` / `browser_navigate` / `browser_lock` などで localhost を開かない。
+- 実装の完了はテスト（必要なら型チェック）まで。ブラウザ操作で待たない。
+- 画面の確認は、push / デプロイのあと本番（https://hanjizu.vercel.app）で行う。
+- デプロイ前なら、ローカル未確認であることと、本番で見てほしい旨だけ書く。

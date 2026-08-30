@@ -18,6 +18,7 @@ import {
   logSteps,
   nextStep,
   pathFor,
+  questionFor,
   type QaAnswers,
   railFitLogLine,
   asksFaceStock,
@@ -355,18 +356,21 @@ test("ジェルトンの枠は定尺2430から本数を出す", () => {
   assert.equal(cut.unfit.length, 0);
 });
 
-test("横幅が3×6を超えるときだけ面材の定尺を聞く。縦残は枠のあと。縦長超えは聞かない", () => {
+test("横幅が3×6を超えるときだけ面材の定尺を聞く。その直後に縦残。縦長超えは聞かない", () => {
   assert.equal(asksFaceStock(panelAnswers()), false);
   assert.equal(asksFaceStock(panelAnswers({ width: 1800, height: 900 })), false);
   assert.equal(asksFaceStock(panelAnswers({ width: 900, height: 2000 })), false);
   const over = panelAnswers({ width: 1200, height: 1800 });
   assert.equal(asksFaceStock(over), true);
   assert.ok(pathFor(over).includes("faceStock"));
+  assert.match(questionFor("faceStock", over), /910mm/);
+  assert.match(questionFor("faceStock", over), /3×6と4×8/);
   assert.equal(nextStep("railFit", over), "faceStock");
-  assert.equal(nextStep("faceStock", over), "materials");
-  assert.equal(nextStep("railPitch", over), "stileExtra");
+  assert.equal(nextStep("faceStock", over), "stileExtra");
   assert.equal(nextStep("stileExtra", over), "stileExtraN");
   assert.equal(nextStep("stileExtraN", over), "stileExtraMat");
+  assert.equal(nextStep("stileExtraMat", over), "materials");
+  assert.equal(nextStep("railPitch", over), "qty");
   assert.equal(extraStileColumns(over), 0);
   assert.equal(extraStileColumns({ ...over, stileExtraN: 1 }), 1);
   assert.equal(extraStileColumns(panelAnswers({ stileExtraN: 1 })), 0);

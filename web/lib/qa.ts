@@ -142,6 +142,14 @@ export function asksStileExtraMat(answers: QaAnswers): boolean {
   return answers.stileExtra === "入れる";
 }
 
+function pushStileExtraSteps(path: StepId[], answers: QaAnswers) {
+  path.push("stileExtra");
+  if (asksFaceStock(answers) || answers.stileExtra === "入れる") {
+    path.push("stileExtraN");
+    if (asksStileExtraMat(answers)) path.push("stileExtraMat");
+  }
+}
+
 export function pathFor(answers: QaAnswers): StepId[] {
   if (answers.product !== "パネル") return BOX_PATH;
   const path: StepId[] = ["product", "panelName", "size", "frameKind"];
@@ -161,14 +169,13 @@ export function pathFor(answers: QaAnswers): StepId[] {
   path.push("railFit");
   if (answers.railFit === "余裕") path.push("railAllow");
   if (asksFaceStock(answers)) path.push("faceStock");
+  if (asksFaceStock(answers) && asksRailPitch(answers)) {
+    pushStileExtraSteps(path, answers);
+  }
   if (isStickKind(answers.frameKind)) path.push("materials");
   if (asksRailPitch(answers)) {
     path.push("railPitch");
-    path.push("stileExtra");
-    if (asksFaceStock(answers) || answers.stileExtra === "入れる") {
-      path.push("stileExtraN");
-      if (asksStileExtraMat(answers)) path.push("stileExtraMat");
-    }
+    if (!asksFaceStock(answers)) pushStileExtraSteps(path, answers);
   }
   path.push("qty");
   path.push("morePanels");
@@ -220,7 +227,9 @@ export function questionFor(step: StepId, answers: QaAnswers): string {
   if (step === "railFit") return "横桟の長さは、枠材の寸面通りですか。余裕を設けますか。";
   if (step === "railAllow") return "横桟の余裕は、何ミリですか。";
   if (step === "railPitch") return "横桟の間隔は、何ミリですか。";
-  if (step === "faceStock") return "横幅が 3×6 を超えるので、面材は 3×6 で作りますか。4×8 も含めますか。";
+  if (step === "faceStock") {
+    return "横幅が910mmを超えるので確認です。面材は3×6と4×8のどちらを使いますか？";
+  }
   if (step === "stileExtra") return "中に縦残を追加しますか？";
   if (step === "stileExtraN") return "縦残は何列入れますか？";
   if (step === "stileExtraMat") {
