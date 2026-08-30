@@ -1,5 +1,8 @@
 /** 枠材を定尺長さへ1次元詰めする。載らない部材は継がず、後回しにする。 */
 
+/** 丸鋸の刃厚。カットのあいだに見て、余りに載るか判定する。 */
+export const SAW_KERF_MM = 3;
+
 export type StickPiece = {
   name: string;
   length: number;
@@ -13,6 +16,7 @@ export type StickBar = {
 
 export type StickCut = {
   stockLength: number;
+  kerf: number;
   bars: StickBar[];
   unfit: StickPiece[];
 };
@@ -20,6 +24,7 @@ export type StickCut = {
 export function packSticks(
   pieces: readonly StickPiece[],
   stockLength: number,
+  kerf: number = SAW_KERF_MM,
 ): StickCut {
   const unfit: StickPiece[] = [];
   const fit = pieces
@@ -35,17 +40,21 @@ export function packSticks(
 
   const bars: StickBar[] = [];
   for (const piece of fit) {
-    let bar = bars.find((item) => item.used + piece.length <= stockLength);
+    let bar = bars.find((item) => {
+      const gap = item.pieces.length > 0 ? kerf : 0;
+      return item.used + gap + piece.length <= stockLength;
+    });
     if (!bar) {
       bar = { pieces: [], used: 0, leftover: stockLength };
       bars.push(bar);
     }
+    const gap = bar.pieces.length > 0 ? kerf : 0;
     bar.pieces.push({ name: piece.name, length: piece.length });
-    bar.used += piece.length;
+    bar.used += gap + piece.length;
     bar.leftover = stockLength - bar.used;
   }
 
-  return { stockLength, bars, unfit };
+  return { stockLength, kerf, bars, unfit };
 }
 
 export function piecesFromMembers(

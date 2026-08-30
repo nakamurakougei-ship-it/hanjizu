@@ -22,9 +22,29 @@ test("4000の定尺から1800が2本取れる", () => {
     4000,
   );
   assert.equal(cut.bars.length, 1);
-  assert.equal(cut.bars[0]?.used, 3600);
-  assert.equal(cut.bars[0]?.leftover, 400);
+  assert.equal(cut.bars[0]?.used, 3603);
+  assert.equal(cut.bars[0]?.leftover, 397);
   assert.equal(cut.unfit.length, 0);
+});
+
+test("カット間に刃厚を見て、余りに載るか判定する", () => {
+  const pieces = [
+    ...Array.from({ length: 4 }, () => ({ name: "縦残", length: 415 })),
+    ...Array.from({ length: 2 }, () => ({ name: "横桟", length: 1159 })),
+  ];
+  const mixed = packSticks(pieces, 4000);
+  assert.equal(mixed.bars.length, 1);
+  assert.equal(mixed.bars[0]?.leftover, 4000 - 3978 - 3 * 5);
+
+  const extraOnly = packSticks(
+    Array.from({ length: 4 }, () => ({ name: "縦残", length: 415 })),
+    4000,
+  );
+  const railsOnly = packSticks(
+    Array.from({ length: 2 }, () => ({ name: "横桟", length: 1159 })),
+    4000,
+  );
+  assert.equal(extraOnly.bars.length + railsOnly.bars.length, 2);
 });
 
 test("定尺を超える部材は継がず載らないとする", () => {

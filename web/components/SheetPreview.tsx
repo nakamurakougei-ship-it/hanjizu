@@ -1,39 +1,62 @@
-import { sheetForPiece } from "@/lib/sheet";
-import type { Member } from "@/lib/model";
+import { shortFaceLabel, type PackedSheet } from "@/lib/sheet";
 
-export function SheetPreview({ member }: { member: Member }) {
-  const sheet = sheetForPiece(member.length, member.width, member.canRotate);
-  if (!sheet) {
-    return <p className="sheet-note">定尺一枚に載らない分割は、後回しです。</p>;
-  }
-
-  const scale = 180 / sheet.length;
-  const sw = sheet.length * scale;
-  const sh = sheet.width * scale;
-  let pw = member.length * scale;
-  let ph = member.width * scale;
-  if (pw > sw || ph > sh) {
-    pw = member.width * scale;
-    ph = member.length * scale;
-  }
+export function SheetPreview({
+  sheet,
+  panelName,
+}: {
+  sheet: PackedSheet;
+  panelName: string;
+}) {
+  const scale = 180 / sheet.stock.length;
+  const sw = sheet.stock.length * scale;
+  const sh = sheet.stock.width * scale;
 
   return (
     <figure className="sheet-fig">
       <figcaption className="parts-key">
-        {sheet.name}（有効 {sheet.length} × {sheet.width}）
+        {sheet.stock.name === "3x6" ? "3×6" : "4×8"}（有効 {sheet.stock.length} ×{" "}
+        {sheet.stock.width}）
+        {"　"}
+        {sheet.pieces
+          .map((piece) => shortFaceLabel(piece.name, panelName))
+          .join(" ＋ ")}
       </figcaption>
       <svg
         className="sheet-svg"
         viewBox={`0 0 ${sw} ${sh}`}
         width={sw}
         height={sh}
-        aria-label={`${sheet.name} の木取図`}
+        aria-label={`${sheet.stock.name} の木取図`}
       >
         <rect x="0" y="0" width={sw} height={sh} className="sheet-stock" />
-        <rect x="1" y="1" width={pw - 2} height={ph - 2} className="sheet-piece" />
-        <text x={pw / 2} y={ph / 2} className="sheet-label">
-          {member.name}
-        </text>
+        {sheet.pieces.map((piece, index) => {
+          const x = piece.x * scale;
+          const y = piece.y * scale;
+          const pw = piece.length * scale;
+          const ph = piece.width * scale;
+          const label = shortFaceLabel(piece.name, panelName);
+          const fs = Math.max(7, Math.min(pw, ph) * 0.22);
+          return (
+            <g key={`${piece.name}-${index}`}>
+              <rect
+                x={x + 0.6}
+                y={y + 0.6}
+                width={Math.max(0, pw - 1.2)}
+                height={Math.max(0, ph - 1.2)}
+                className="sheet-piece"
+              />
+              <text
+                x={x + pw / 2}
+                y={y + ph / 2}
+                fontSize={fs}
+                strokeWidth={fs * 0.14}
+                className="sheet-label"
+              >
+                {label}
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </figure>
   );

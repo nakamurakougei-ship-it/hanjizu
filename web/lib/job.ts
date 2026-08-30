@@ -21,6 +21,10 @@ export function panelDisplayName(answers: QaAnswers): string {
   return name ? name : "パネル";
 }
 
+export function panelSidesLabel(answers: QaAnswers): string {
+  return answers.sides === "両面" ? "両面パネル" : "片面パネル";
+}
+
 export function panelSummaryLine(answers: QaAnswers): string {
   const size = `${answers.width} × ${answers.height} mm`;
   if (answers.qty == null) return `${panelDisplayName(answers)} ${size}`;

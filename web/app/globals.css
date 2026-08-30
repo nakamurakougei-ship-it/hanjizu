@@ -515,7 +515,25 @@ body.no-bg {
   letter-spacing: 0.08em;
 }
 
-.parts-stile,
+.parts-stick-lines {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+  font-family: var(--mincho);
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+}
+
+.stick-seg.is-kerf {
+  flex: 0 0 auto;
+  min-width: 2px;
+  padding: 0;
+  border-right: none;
+  background: rgba(40, 32, 24, 0.45);
+}
+
 .parts-stick-label {
   margin: 0 0 0.35rem;
   font-family: var(--mincho);
@@ -682,7 +700,8 @@ body.no-bg {
 
 .sheet-label {
   fill: var(--ink);
-  font-size: 9px;
+  stroke: rgba(255, 252, 245, 0.9);
+  paint-order: stroke;
   font-family: var(--mincho);
   text-anchor: middle;
   dominant-baseline: middle;

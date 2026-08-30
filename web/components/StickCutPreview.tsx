@@ -1,4 +1,4 @@
-import type { StickCut } from "@/lib/stickCut";
+import { SAW_KERF_MM, type StickCut } from "@/lib/stickCut";
 
 export function StickCutPreview({
   cut,
@@ -8,6 +8,7 @@ export function StickCutPreview({
   id: string;
 }) {
   if (cut.bars.length === 0) return null;
+  const kerf = cut.kerf ?? SAW_KERF_MM;
   return (
     <ol className="stick-cuts">
       {cut.bars.map((bar, index) => (
@@ -20,18 +21,32 @@ export function StickCutPreview({
             {bar.leftover > 0 ? `　余り ${bar.leftover}mm` : ""}
           </span>
           <span className="stick-bar" aria-hidden="true">
-            {bar.pieces.map((piece, pieceIndex) => (
-              <span
-                key={`${piece.name}-${pieceIndex}`}
-                className="stick-seg"
-                style={{
-                  flexGrow: piece.length,
-                  flexBasis: 0,
-                }}
-              >
-                {piece.length}
-              </span>
-            ))}
+            {bar.pieces.flatMap((piece, pieceIndex) => {
+              const segs = [];
+              if (pieceIndex > 0 && kerf > 0) {
+                segs.push(
+                  <span
+                    key={`${id}-k-${index}-${pieceIndex}`}
+                    className="stick-seg is-kerf"
+                    style={{ flexGrow: kerf, flexBasis: 0 }}
+                    title={`刃厚 ${kerf}mm`}
+                  />,
+                );
+              }
+              segs.push(
+                <span
+                  key={`${id}-p-${index}-${pieceIndex}`}
+                  className="stick-seg"
+                  style={{
+                    flexGrow: piece.length,
+                    flexBasis: 0,
+                  }}
+                >
+                  {piece.length}
+                </span>,
+              );
+              return segs;
+            })}
             {bar.leftover > 0 ? (
               <span
                 className="stick-seg is-left"

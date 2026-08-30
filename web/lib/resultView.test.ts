@@ -8,6 +8,8 @@ import {
   materialLabel,
   railGroups,
   railKindLabel,
+  stickCutsByMaterial,
+  stickMemberLines,
   stockCountText,
   stileCount,
   stileCut,
@@ -112,6 +114,40 @@ test("追加の縦残は材料ごとに分けて本数を出す", () => {
   assert.equal(groups[0]?.count, 4);
 });
 
+test("棒の木取図は縦横を分けず材料ごとにネストする", () => {
+  const members = membersFromPanel({
+    ...defaultAnswers(),
+    product: "パネル",
+    name: "基礎パネル 1",
+    width: 1200,
+    height: 1800,
+    sides: "両面",
+    frameKind: "小割",
+    boneUse: "成使い",
+    railKind: "上下垂木",
+    railFit: "余裕",
+    railAllow: 1,
+    faceStock: "3×6",
+    stileExtra: "入れる",
+    stileExtraN: 1,
+    faceMaterial: "ラワンベニヤ",
+    qty: 1,
+  });
+  const lines = stickMemberLines(members);
+  const byLabel = Object.fromEntries(
+    lines.map((line) => [`${line.label} ${line.length}`, line.count]),
+  );
+  assert.equal(byLabel["縦残（小割） 1800"], 2);
+  assert.equal(byLabel["縦残（垂木） 415"], 4);
+  assert.equal(byLabel["横桟（小割） 1159"], 3);
+  assert.equal(byLabel["横桟（垂木） 1159"], 2);
+  const cuts = Object.fromEntries(
+    stickCutsByMaterial(members).map((item) => [item.label, item.cut.bars.length]),
+  );
+  assert.equal(cuts["小割 20×30"], 2);
+  assert.equal(cuts["垂木 30×40"], 1);
+});
+
 test("使用材の表示は枠材が本、ベニヤは3×6か4×8", () => {
   assert.equal(materialLabel("小割 20×30 30"), "小割 20×30");
   assert.equal(materialLabel("ラワンベニヤ 3"), "ラワンベニヤ 3mm");
@@ -123,6 +159,7 @@ test("使用材の表示は枠材が本、ベニヤは3×6か4×8", () => {
     meters: 0,
     stickCut: {
       stockLength: 4000,
+      kerf: 3,
       bars: [
         { pieces: [], used: 0, leftover: 4000 },
         { pieces: [], used: 0, leftover: 4000 },

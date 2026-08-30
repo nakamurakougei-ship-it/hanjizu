@@ -62,6 +62,76 @@ export function stileCut(members: Member[]): StickCut | null {
   return packSticks(pieces, stock);
 }
 
+export function frameKindShortName(materialKey: string): string {
+  const parsed = parseMaterialKey(materialKey);
+  const name = parsed?.name ?? materialKey;
+  if (name.startsWith("小割")) return "小割";
+  if (name.startsWith("垂木")) return "垂木";
+  return name.replace(/\s+\d+(\.\d+)?$/, "").trim() || name;
+}
+
+export function stickRoleLabel(name: string, materialKey: string): string {
+  const kind = frameKindShortName(materialKey);
+  if (isStileName(name) || isVStileName(name)) return `縦残（${kind}）`;
+  if (isRailName(name)) return `横桟（${kind}）`;
+  return kind;
+}
+
+export function isStickMemberName(name: string): boolean {
+  return isStileName(name) || isRailName(name) || isVStileName(name);
+}
+
+export type StickLine = {
+  label: string;
+  length: number;
+  count: number;
+};
+
+export function stickMemberLines(members: Member[]): StickLine[] {
+  const map = new Map<string, StickLine>();
+  for (const item of members) {
+    if (!isStickMemberName(item.name)) continue;
+    const label = stickRoleLabel(item.name, item.materialKey);
+    const key = `${label}\t${item.length}`;
+    const prev = map.get(key);
+    if (prev) prev.count += item.qty;
+    else map.set(key, { label, length: item.length, count: item.qty });
+  }
+  return [...map.values()].sort((a, b) => {
+    const rank = (label: string) =>
+      label.startsWith("縦残") ? 0 : label.startsWith("横桟") ? 1 : 2;
+    return rank(a.label) - rank(b.label) || a.label.localeCompare(b.label, "ja") || b.length - a.length;
+  });
+}
+
+export type MaterialCut = {
+  key: string;
+  label: string;
+  cut: StickCut;
+};
+
+export function stickCutsByMaterial(members: Member[]): MaterialCut[] {
+  const byKey = new Map<string, Member[]>();
+  for (const item of members) {
+    if (!isStickMemberName(item.name)) continue;
+    const list = byKey.get(item.materialKey) ?? [];
+    list.push(item);
+    byKey.set(item.materialKey, list);
+  }
+  const out: MaterialCut[] = [];
+  for (const [key, items] of byKey) {
+    const parsed = parseMaterialKey(key);
+    const stock = parsed ? linearStockLength(parsed.name) : null;
+    if (stock == null) continue;
+    out.push({
+      key,
+      label: materialLabel(key),
+      cut: packSticks(piecesFromMembers(items), stock),
+    });
+  }
+  return out;
+}
+
 export function isRailName(name: string): boolean {
   return /(?:^|\s)(上桟|下桟|中桟\d+)$/.test(name);
 }

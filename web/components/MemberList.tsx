@@ -9,17 +9,17 @@ import {
 import {
   membersFromPanel,
   panelDisplayName,
+  panelSidesLabel,
   type PanelEntry,
 } from "@/lib/job";
+import { packFaceSheets } from "@/lib/sheet";
 import { quoteBundle, yenText } from "@/lib/ledger";
 import {
   materialLabel,
   quoteAvailableTotal,
   stockCountText,
-  stileCount,
-  stileCut,
-  railGroups,
-  vStileGroups,
+  stickCutsByMaterial,
+  stickMemberLines,
 } from "@/lib/resultView";
 import type { Member } from "@/lib/model";
 import type { QaAnswers } from "@/lib/qa";
@@ -85,51 +85,59 @@ export function MemberList({
       {panelList.length > 0
         ? panelList.map((entry) => {
             const part = membersFromPanel(entry.answers);
-            const nStile = stileCount(part);
-            const cut = stileCut(part);
-            const extras = vStileGroups(part);
-            const rails = railGroups(part);
+            const lines = stickMemberLines(part);
+            const cuts = stickCutsByMaterial(part);
             const faces = part.filter(isFaceOrCore);
+            const sheets = packFaceSheets(faces);
+            const sheetTitle = faces.some((item) =>
+              item.materialKey.includes("ベニヤ"),
+            )
+              ? "ベニヤの木取図"
+              : "板の木取図";
             return (
               <section key={entry.id} className="parts-panel">
                 <h2 className="parts-panel-name">
-                  {panelDisplayName(entry.answers)}
+                  {panelDisplayName(entry.answers)} {panelSidesLabel(entry.answers)}
                 </h2>
-                {nStile > 0 ? (
-                  <p className="parts-stick-label">縦残 {nStile}本</p>
+                {lines.length > 0 ? (
+                  <ul className="parts-stick-lines">
+                    {lines.map((line) => (
+                      <li key={`${line.label}-${line.length}`}>
+                        {line.label} {line.length}mm　{line.count}本
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
-                {cut ? (
-                  <StickCutPreview cut={cut} id={`${entry.id}-stile`} />
-                ) : null}
-                {extras.map((group) => (
+                {cuts.map((group) => (
                   <div key={group.key} className="parts-rail">
                     <p className="parts-stick-label">
-                      {group.label} {group.count}本
+                      {group.label}　定尺 {group.cut.stockLength}mm
+                      {group.cut.kerf > 0 ? `　刃厚 ${group.cut.kerf}mm` : ""}
                     </p>
-                    {group.cut ? (
-                      <StickCutPreview
-                        cut={group.cut}
-                        id={`${entry.id}-vstile-${group.key}`}
-                      />
-                    ) : null}
+                    <StickCutPreview
+                      cut={group.cut}
+                      id={`${entry.id}-stick-${group.key}`}
+                    />
                   </div>
                 ))}
-                {rails.map((group) => (
-                  <div key={group.key} className="parts-rail">
-                    <p className="parts-stick-label">
-                      {group.label} {group.count}本
-                    </p>
-                    {group.cut ? (
-                      <StickCutPreview
-                        cut={group.cut}
-                        id={`${entry.id}-rail-${group.key}`}
+                {faces.length > 0 ? (
+                  <div className="parts-sheets">
+                    <p className="parts-stick-label">{sheetTitle}</p>
+                    {sheets.sheets.map((sheet, index) => (
+                      <SheetPreview
+                        key={`${entry.id}-sheet-${index}`}
+                        sheet={sheet}
+                        panelName={panelDisplayName(entry.answers)}
                       />
+                    ))}
+                    {sheets.unfit.length > 0 ? (
+                      <p className="sheet-note">
+                        {sheets.unfit.map((item) => item.name).join("、")}
+                        は定尺一枚に載らない（分割は後回し）
+                      </p>
                     ) : null}
                   </div>
-                ))}
-                {faces.map((item) => (
-                  <SheetPreview key={item.id} member={item} />
-                ))}
+                ) : null}
               </section>
             );
           })

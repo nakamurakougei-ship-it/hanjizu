@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "tsx --test lib/box.test.ts lib/split.test.ts lib/panel.test.ts lib/ledger.test.ts lib/stickCut.test.ts lib/job.test.ts lib/resultView.test.ts"
+    "test": "tsx --test lib/box.test.ts lib/split.test.ts lib/panel.test.ts lib/ledger.test.ts lib/stickCut.test.ts lib/job.test.ts lib/resultView.test.ts lib/sheet.test.ts"
   },
   "dependencies": {
     "next": "^15.3.3",

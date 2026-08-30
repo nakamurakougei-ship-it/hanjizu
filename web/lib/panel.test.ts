@@ -346,7 +346,7 @@ test("ジェルトンの枠は定尺2430から本数を出す", () => {
     }),
   ).filter((item) => item.materialKey.startsWith("ジェルトン"));
   const cut = packSticks(piecesFromMembers(frame), 2430);
-  assert.equal(cut.bars.length, 4);
+  assert.equal(cut.bars.length, 5);
   assert.equal(cut.unfit.length, 0);
 });
 
