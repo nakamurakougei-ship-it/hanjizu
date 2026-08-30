@@ -28,6 +28,7 @@ import {
   type FaceStock,
   type RailFit,
   type StileExtra,
+  type StileExtraMat,
   type RailKind,
   type SheetFace,
   type SheetUse,
@@ -227,9 +228,13 @@ export function HanjizuApp() {
         stileExtra: () => {
           delete next.stileExtra;
           delete next.stileExtraN;
+          delete next.stileExtraMat;
         },
         stileExtraN: () => {
           delete next.stileExtraN;
+        },
+        stileExtraMat: () => {
+          delete next.stileExtraMat;
         },
         frameKind: () => {
           delete next.frameKind;
@@ -285,6 +290,7 @@ export function HanjizuApp() {
         delete next.faceStock;
         delete next.stileExtra;
         delete next.stileExtraN;
+        delete next.stileExtraMat;
         delete next.name;
         delete next.qty;
         delete next.panelId;
@@ -1009,7 +1015,10 @@ export function HanjizuApp() {
                   }
                   onPick={(value: StileExtra) => {
                     const next = { ...answers, stileExtra: value };
-                    if (value === "入れない") delete next.stileExtraN;
+                    if (value === "入れない") {
+                      delete next.stileExtraN;
+                      delete next.stileExtraMat;
+                    }
                     setAnswers(next);
                     goTo(nextStep("stileExtra", next));
                   }}
@@ -1052,6 +1061,50 @@ export function HanjizuApp() {
                   この列数で進む
                 </button>
               </form>
+            ) : null}
+
+            {step === "stileExtraMat" ? (
+              <>
+                <p className="now-ask">{questionFor("stileExtraMat", answers)}</p>
+                <ChoiceRow
+                  choices={
+                    answers.boneUse === "横使い"
+                      ? [
+                          {
+                            value: "小割",
+                            label: "小割の平",
+                            hint: "枠と同じ寸面",
+                            ready: true,
+                          },
+                          {
+                            value: "垂木を削る",
+                            label: "垂木を20mmに削る",
+                            hint: "定尺は垂木、成は枠に合わせる",
+                            ready: true,
+                          },
+                        ]
+                      : [
+                          {
+                            value: "垂木",
+                            label: "垂木",
+                            hint: "面巾40で固定代",
+                            ready: true,
+                          },
+                          {
+                            value: "小割",
+                            label: "小割",
+                            hint: "枠と同じ寸面",
+                            ready: true,
+                          },
+                        ]
+                  }
+                  onPick={(value: StileExtraMat) => {
+                    const next = { ...answers, stileExtraMat: value };
+                    setAnswers(next);
+                    goTo(nextStep("stileExtraMat", next));
+                  }}
+                />
+              </>
             ) : null}
 
             {step === "qty" ? (

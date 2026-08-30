@@ -73,6 +73,17 @@ function extraStileSpec(
   frame: { sei: number; fw: number; materialName: string },
 ): { width: number; thickness: number; materialName: string } {
   if (answers.frameKind === "小割" || answers.frameKind == null) {
+    const use = answers.boneUse ?? "成使い";
+    const sameAsFrame =
+      answers.stileExtraMat === "小割" ||
+      (answers.stileExtraMat == null && use === "横使い");
+    if (sameAsFrame) {
+      return {
+        width: kogaraFace(use),
+        thickness: kogaraSei(use),
+        materialName: stickName("小割"),
+      };
+    }
     return {
       width: TARUKI.long,
       thickness: frame.sei,
@@ -84,6 +95,11 @@ function extraStileSpec(
     thickness: frame.sei,
     materialName: frame.materialName,
   };
+}
+
+export function extraStilePlaneNote(answers: QaAnswers): string | null {
+  if (answers.stileExtraMat !== "垂木を削る") return null;
+  return `垂木を${kogaraSei("横使い")}mmに削る条件で木取図を作成`;
 }
 
 function pushExtraStiles(

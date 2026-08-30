@@ -49,6 +49,7 @@ export type SheetUse = "厚み" | "割き";
 export type RailFit = "寸面通り" | "余裕";
 export type FaceStock = "3×6" | "4×8込み";
 export type StileExtra = "入れる" | "入れない";
+export type StileExtraMat = "小割" | "垂木" | "垂木を削る";
 
 export type QaAnswers = {
   product?: ProductKind;
@@ -69,6 +70,7 @@ export type QaAnswers = {
   faceStock?: FaceStock;
   stileExtra?: StileExtra;
   stileExtraN?: number;
+  stileExtraMat?: StileExtraMat;
   sides?: PanelSides;
   faceMaterial?: string;
   name?: string;
@@ -95,6 +97,7 @@ export type StepId =
   | "railPitch"
   | "stileExtra"
   | "stileExtraN"
+  | "stileExtraMat"
   | "frameKind"
   | "boneUse"
   | "railKind"
@@ -132,23 +135,22 @@ export function asksFaceStock(answers: QaAnswers): boolean {
   return !fitsOn(answers.height, answers.width, USABLE_36, true);
 }
 
+/** 小割枠で中の縦残を入れるときだけ、何を使うかを聞く。 */
+export function asksStileExtraMat(answers: QaAnswers): boolean {
+  if (answers.frameKind !== "小割") return false;
+  if (asksFaceStock(answers)) return true;
+  return answers.stileExtra === "入れる";
+}
+
 export function pathFor(answers: QaAnswers): StepId[] {
   if (answers.product !== "パネル") return BOX_PATH;
-  const path: StepId[] = ["product", "panelName", "size", "railFit"];
-  if (answers.railFit === "余裕") path.push("railAllow");
-  if (asksFaceStock(answers)) {
-    path.push("faceStock");
-    path.push("stileExtra");
-    path.push("stileExtraN");
-  }
-  path.push("frameKind");
+  const path: StepId[] = ["product", "panelName", "size", "frameKind"];
   if (isStickKind(answers.frameKind)) {
     path.push("boneUse");
     if (answers.frameKind === "小割" && answers.boneUse !== "横使い") {
       path.push("railKind");
     }
     if (answers.width > answers.height) path.push("frameWin");
-    path.push("materials");
   } else if (isNamedTimberKind(answers.frameKind)) {
     path.push("frameStock");
   } else if (isSheetKind(answers.frameKind)) {
@@ -156,11 +158,16 @@ export function pathFor(answers: QaAnswers): StepId[] {
     path.push("frameStock");
     path.push("sheetUse");
   }
+  path.push("railFit");
+  if (answers.railFit === "余裕") path.push("railAllow");
+  if (asksFaceStock(answers)) path.push("faceStock");
+  if (isStickKind(answers.frameKind)) path.push("materials");
   if (asksRailPitch(answers)) {
     path.push("railPitch");
-    if (!asksFaceStock(answers)) {
-      path.push("stileExtra");
-      if (answers.stileExtra === "入れる") path.push("stileExtraN");
+    path.push("stileExtra");
+    if (asksFaceStock(answers) || answers.stileExtra === "入れる") {
+      path.push("stileExtraN");
+      if (asksStileExtraMat(answers)) path.push("stileExtraMat");
     }
   }
   path.push("qty");
@@ -216,6 +223,11 @@ export function questionFor(step: StepId, answers: QaAnswers): string {
   if (step === "faceStock") return "横幅が 3×6 を超えるので、面材は 3×6 で作りますか。4×8 も含めますか。";
   if (step === "stileExtra") return "中に縦残を追加しますか？";
   if (step === "stileExtraN") return "縦残は何列入れますか？";
+  if (step === "stileExtraMat") {
+    return answers.boneUse === "横使い"
+      ? "中の縦残は、小割の平ですか。垂木を20mmに削りますか。"
+      : "中の縦残は、何を使いますか。";
+  }
   if (step === "frameKind") return "枠材は何を使いますか？";
   if (step === "boneUse") return "枠材の向きを選択";
   if (step === "railKind") return "上下桟は、小割のままですか。垂木にしますか。";
@@ -257,6 +269,7 @@ export const STEP_TITLES: Record<Exclude<StepId, "done">, string> = {
   railPitch: "横桟の間隔",
   stileExtra: "縦残",
   stileExtraN: "縦残の列数",
+  stileExtraMat: "縦残の材料",
   frameKind: "枠材",
   boneUse: "枠材の向き",
   railKind: "上下桟",
@@ -288,6 +301,7 @@ const FOLDED_FRAME_STEPS: ReadonlySet<StepId> = new Set([
   "frameStock",
   "railAllow",
   "stileExtraN",
+  "stileExtraMat",
   "morePanels",
 ]);
 
@@ -344,11 +358,21 @@ export function railFitLogLine(answers: QaAnswers, current: StepId): string {
 export function stileExtraLogLine(answers: QaAnswers, current: StepId): string {
   if (answers.stileExtra === "入れない") return "入れない";
   if (answers.stileExtra !== "入れる") return "";
+  const bits: string[] = [];
   if (
     answers.stileExtraN != null &&
     stepAlreadyDecided("stileExtraN", current, answers)
   ) {
-    return `${answers.stileExtraN}列`;
+    bits.push(`${answers.stileExtraN}列`);
   }
+  if (
+    answers.stileExtraMat &&
+    stepAlreadyDecided("stileExtraMat", current, answers)
+  ) {
+    bits.push(
+      answers.stileExtraMat === "垂木を削る" ? "垂木を20mmに削る" : answers.stileExtraMat,
+    );
+  }
+  if (bits.length > 0) return bits.join(" ");
   return "追加する";
 }

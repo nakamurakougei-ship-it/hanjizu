@@ -7,6 +7,9 @@ import {
   membersFromAnswers,
 } from "@/lib/box";
 import {
+  extraStilePlaneNote,
+} from "@/lib/panel";
+import {
   membersFromPanel,
   panelDisplayName,
   panelSidesLabel,
@@ -87,6 +90,7 @@ export function MemberList({
             const part = membersFromPanel(entry.answers);
             const lines = stickMemberLines(part);
             const cuts = stickCutsByMaterial(part);
+            const planeNote = extraStilePlaneNote(entry.answers);
             const faces = part.filter(isFaceOrCore);
             const sheets = packFaceSheets(faces);
             const sheetTitle = faces.some((item) =>
@@ -99,6 +103,7 @@ export function MemberList({
                 <h2 className="parts-panel-name">
                   {panelDisplayName(entry.answers)} {panelSidesLabel(entry.answers)}
                 </h2>
+                {planeNote ? <p className="sheet-note">{planeNote}</p> : null}
                 {lines.length > 0 ? (
                   <ul className="parts-stick-lines">
                     {lines.map((line) => (

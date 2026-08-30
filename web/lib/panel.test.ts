@@ -6,6 +6,7 @@ import {
   PANEL_FACE_T_MM,
   TARUKI,
   extraStileColumns,
+  extraStilePlaneNote,
   extraStileSegLength,
   midRailCount,
   panelMembers,
@@ -161,7 +162,7 @@ test("両面なら面材が表裏出る", () => {
   assert.ok(members.some((item) => item.name === "面材 裏"));
 });
 
-test("パネルの質問は寸法のあと横桟の長さ、それから枠材。横使いと縦長では出ない枝を聞かない", () => {
+test("パネルの質問は寸法のあと枠材、向き、それから横桟の長さ。横使いと縦長では出ない枝を聞かない", () => {
   assert.equal(nextStep("product", panelAnswers()), "panelName");
   assert.equal(
     nextStep("product", { ...defaultAnswers(), product: "箱" }),
@@ -173,10 +174,10 @@ test("パネルの質問は寸法のあと横桟の長さ、それから枠材�
     "product",
     "panelName",
     "size",
-    "railFit",
     "frameKind",
     "boneUse",
     "railKind",
+    "railFit",
     "materials",
     "railPitch",
     "stileExtra",
@@ -188,7 +189,9 @@ test("パネルの質問は寸法のあと横桟の長さ、それから枠材�
   const allow = panelAnswers({ railFit: "余裕" });
   assert.ok(pathFor(allow).includes("railAllow"));
   assert.equal(nextStep("railFit", allow), "railAllow");
-  assert.equal(nextStep("railFit", tall), "frameKind");
+  assert.equal(nextStep("size", tall), "frameKind");
+  assert.equal(nextStep("railKind", tall), "railFit");
+  assert.equal(nextStep("railFit", tall), "materials");
 
   const yokotsukai = panelAnswers({ boneUse: "横使い" });
   assert.equal(pathFor(yokotsukai).includes("railKind"), false);
@@ -196,8 +199,10 @@ test("パネルの質問は寸法のあと横桟の長さ、それから枠材�
   const wide = panelAnswers({ width: 1800, height: 900 });
   assert.ok(pathFor(wide).includes("frameWin"));
   assert.equal(nextStep("railKind", wide), "frameWin");
+  assert.equal(nextStep("frameWin", wide), "railFit");
   assert.equal(nextStep("railPitch", tall), "stileExtra");
   assert.ok(pathFor({ ...tall, stileExtra: "入れる" }).includes("stileExtraN"));
+  assert.ok(pathFor({ ...tall, stileExtra: "入れる" }).includes("stileExtraMat"));
 });
 
 test("枠材が垂木なら上下桟の枝は出ず、枠は全部垂木", () => {
@@ -220,11 +225,11 @@ test("ランバーはラワンかシナのあと厚みを聞き、厚みの使�
     "product",
     "panelName",
     "size",
-    "railFit",
     "frameKind",
     "sheetFace",
     "frameStock",
     "sheetUse",
+    "railFit",
     "qty",
     "morePanels",
     "done",
@@ -246,9 +251,9 @@ test("ジェルトンは幅45・入力した厚みが成の枠になる", () => 
     "product",
     "panelName",
     "size",
-    "railFit",
     "frameKind",
     "frameStock",
+    "railFit",
     "railPitch",
     "stileExtra",
     "qty",
@@ -289,8 +294,8 @@ test("枠材のログは種類と厚みを1行にまとめる", () => {
     "product",
     "panelName",
     "size",
-    "railFit",
     "frameKind",
+    "railFit",
     "railPitch",
     "stileExtra",
     "qty",
@@ -310,9 +315,9 @@ test("枠材のログは種類と厚みを1行にまとめる", () => {
     "product",
     "panelName",
     "size",
-    "railFit",
     "frameKind",
     "sheetUse",
+    "railFit",
     "qty",
   ]);
 });
@@ -350,7 +355,7 @@ test("ジェルトンの枠は定尺2430から本数を出す", () => {
   assert.equal(cut.unfit.length, 0);
 });
 
-test("横幅が3×6を超えるときだけ面材の定尺を聞き、その直後に縦残を聞く。縦長超えは聞かない", () => {
+test("横幅が3×6を超えるときだけ面材の定尺を聞く。縦残は枠のあと。縦長超えは聞かない", () => {
   assert.equal(asksFaceStock(panelAnswers()), false);
   assert.equal(asksFaceStock(panelAnswers({ width: 1800, height: 900 })), false);
   assert.equal(asksFaceStock(panelAnswers({ width: 900, height: 2000 })), false);
@@ -358,11 +363,10 @@ test("横幅が3×6を超えるときだけ面材の定尺を聞き、その直�
   assert.equal(asksFaceStock(over), true);
   assert.ok(pathFor(over).includes("faceStock"));
   assert.equal(nextStep("railFit", over), "faceStock");
-  assert.equal(nextStep("faceStock", over), "stileExtra");
+  assert.equal(nextStep("faceStock", over), "materials");
+  assert.equal(nextStep("railPitch", over), "stileExtra");
   assert.equal(nextStep("stileExtra", over), "stileExtraN");
-  assert.equal(nextStep("stileExtraN", over), "frameKind");
-  assert.equal(nextStep("railPitch", over), "qty");
-  assert.ok(!pathFor(over).slice(pathFor(over).indexOf("railPitch")).includes("stileExtra"));
+  assert.equal(nextStep("stileExtraN", over), "stileExtraMat");
   assert.equal(extraStileColumns(over), 0);
   assert.equal(extraStileColumns({ ...over, stileExtraN: 1 }), 1);
   assert.equal(extraStileColumns(panelAnswers({ stileExtraN: 1 })), 0);
@@ -381,6 +385,39 @@ test("縦残1列は横桟の間に均等。小割枠なら繋ぎは垂木", () =
   assert.equal(extra.width, TARUKI.long);
   assert.equal(extra.thickness, 30);
   assert.equal(extra.materialKey, "垂木 30×40 30");
+});
+
+test("小割の平使いでは中の縦残を小割か、垂木を削るかを選べる", () => {
+  const same = panelMembers(
+    panelAnswers({
+      boneUse: "横使い",
+      stileExtra: "入れる",
+      stileExtraN: 1,
+      stileExtraMat: "小割",
+    }),
+  ).find((item) => item.name === "縦残");
+  assert.ok(same);
+  assert.equal(same.materialKey, "小割 20×30 20");
+  assert.equal(same.width, 30);
+  assert.equal(same.thickness, 20);
+  assert.equal(extraStilePlaneNote(panelAnswers({ stileExtraMat: "小割" })), null);
+
+  const planed = panelMembers(
+    panelAnswers({
+      boneUse: "横使い",
+      stileExtra: "入れる",
+      stileExtraN: 1,
+      stileExtraMat: "垂木を削る",
+    }),
+  ).find((item) => item.name === "縦残");
+  assert.ok(planed);
+  assert.equal(planed.materialKey, "垂木 30×40 20");
+  assert.equal(planed.width, TARUKI.long);
+  assert.equal(planed.thickness, 20);
+  assert.equal(
+    extraStilePlaneNote(panelAnswers({ stileExtraMat: "垂木を削る" })),
+    "垂木を20mmに削る条件で木取図を作成",
+  );
 });
 
 test("ジェルトンの縦残は枠と同じ寸面", () => {
