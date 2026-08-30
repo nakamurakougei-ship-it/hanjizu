@@ -15,12 +15,29 @@ export function stileCount(members: Member[]): number {
   return stileMembers(members).reduce((sum, item) => sum + item.qty, 0);
 }
 
-export function materialLabel(key: string): string {
+export function materialLabel(
+  key: string,
+  quote?: Pick<BundleQuote, "count36" | "count48">,
+): string {
   const parsed = parseMaterialKey(key);
   if (!parsed) return key;
   const { name, thickness } = parsed;
   if (name.startsWith("小割") || name.startsWith("垂木")) return name;
+  if (/ベニヤ|ランバー/.test(name)) {
+    const stock = sheetStockLabel(quote);
+    return stock ? `${thickness}mm${name} ${stock}` : `${thickness}mm${name}`;
+  }
   return `${name} ${thickness}mm`;
+}
+
+function sheetStockLabel(
+  quote?: Pick<BundleQuote, "count36" | "count48">,
+): string {
+  if (!quote) return "";
+  if (quote.count36 > 0 && quote.count48 > 0) return "";
+  if (quote.count48 > 0) return "4×8";
+  if (quote.count36 > 0) return "3×6";
+  return "";
 }
 
 export function stockCountText(quote: BundleQuote): string {
@@ -31,9 +48,8 @@ export function stockCountText(quote: BundleQuote): string {
   if (quote.count36 > 0 && quote.count48 > 0) {
     return `3×6 ${quote.count36}枚 ／ 4×8 ${quote.count48}枚`;
   }
-  if (quote.count36 > 0) return `3×6 ${quote.count36}枚`;
-  if (quote.count48 > 0) return `4×8 ${quote.count48}枚`;
-  return "";
+  const n = quote.count36 + quote.count48;
+  return n > 0 ? `${n}枚` : "";
 }
 
 export function quoteAvailableTotal(quotes: BundleQuote[]): {

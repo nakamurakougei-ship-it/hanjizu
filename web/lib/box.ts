@@ -10,9 +10,8 @@ import {
   type Face,
 } from "./model";
 import { splitOversize } from "./split";
-import { panelSei, PANEL_FACE_T_MM } from "./panel";
+import { panelFinishThickness } from "./panel";
 import { membersFromPanel } from "./job";
-import { isSheetKind } from "./catalog";
 import {
   FINISH_THICK_MM,
   YOTORI_MM,
@@ -53,14 +52,7 @@ export function boxFromAnswers(answers: QaAnswers): Product {
   const t = answers.lumberT;
 
   if (answers.product === "パネル") {
-    const sei = panelSei(answers);
-    const skins =
-      isSheetKind(answers.frameKind) && answers.sheetUse !== "割き"
-        ? 0
-        : answers.sides === "両面"
-          ? 2
-          : 1;
-    const thick = sei + PANEL_FACE_T_MM * skins;
+    const thick = panelFinishThickness(answers);
     const box = emptyBox("パネル", answers.width, answers.height, thick);
     box.faces.top = {
       id: "top",

@@ -12,7 +12,7 @@ import {
 import {
   membersFromPanel,
   panelDisplayName,
-  panelSidesLabel,
+  panelResultTitle,
   type PanelEntry,
 } from "@/lib/job";
 import { packFaceSheets } from "@/lib/sheet";
@@ -70,8 +70,9 @@ export function MemberList({
             return (
               <li key={quote.key}>
                 <span className="parts-stock-name">
-                  {materialLabel(quote.key)}
+                  {materialLabel(quote.key, quote)}
                 </span>
+                <span className="parts-stock-rule" aria-hidden="true" />
                 <span className="parts-stock-count">{count}</span>
               </li>
             );
@@ -101,7 +102,7 @@ export function MemberList({
             return (
               <section key={entry.id} className="parts-panel">
                 <h2 className="parts-panel-name">
-                  {panelDisplayName(entry.answers)} {panelSidesLabel(entry.answers)}
+                  {panelResultTitle(entry.answers)}
                 </h2>
                 {planeNote ? <p className="sheet-note">{planeNote}</p> : null}
                 {lines.length > 0 ? (

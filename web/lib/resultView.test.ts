@@ -148,9 +148,13 @@ test("棒の木取図は縦横を分けず材料ごとにネストする", () =>
   assert.equal(cuts["垂木 30×40"], 1);
 });
 
-test("使用材の表示は枠材が本、ベニヤは3×6か4×8", () => {
+test("使用材の表示は枠材が本、ベニヤは厚み＋名前＋定尺", () => {
   assert.equal(materialLabel("小割 20×30 30"), "小割 20×30");
-  assert.equal(materialLabel("ラワンベニヤ 3"), "ラワンベニヤ 3mm");
+  assert.equal(materialLabel("ラワンベニヤ 3"), "3mmラワンベニヤ");
+  assert.equal(
+    materialLabel("ラワンベニヤ 3", { count36: 1, count48: 0 }),
+    "3mmラワンベニヤ 3×6",
+  );
   const stick: BundleQuote = {
     key: "小割 20×30 30",
     yen: null,
@@ -175,7 +179,7 @@ test("使用材の表示は枠材が本、ベニヤは3×6か4×8", () => {
     count48: 0,
     meters: 0,
   };
-  assert.equal(stockCountText(sheet), "3×6 1枚");
+  assert.equal(stockCountText(sheet), "1枚");
   const sheet48: BundleQuote = {
     key: "ラワンベニヤ 3",
     yen: 2760,
@@ -183,5 +187,9 @@ test("使用材の表示は枠材が本、ベニヤは3×6か4×8", () => {
     count48: 1,
     meters: 0,
   };
-  assert.equal(stockCountText(sheet48), "4×8 1枚");
+  assert.equal(
+    materialLabel("ラワンベニヤ 3", { count36: 0, count48: 1 }),
+    "3mmラワンベニヤ 4×8",
+  );
+  assert.equal(stockCountText(sheet48), "1枚");
 });

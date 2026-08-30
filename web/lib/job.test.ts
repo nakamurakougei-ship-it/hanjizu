@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { defaultAnswers } from "./qa";
-import { membersFromJob, membersFromPanel, panelSidesLabel, panelSummaryLine } from "./job";
+import { membersFromJob, membersFromPanel, panelResultTitle, panelSidesLabel, panelSummaryLine } from "./job";
 
 function panel(patch: Record<string, unknown> = {}) {
   return {
@@ -40,4 +40,9 @@ test("複数パネルは名称とサイズで見分け、同じ材料は一つ�
   );
   assert.equal(panelSidesLabel(panel()), "片面パネル");
   assert.equal(panelSidesLabel(panel({ sides: "両面" })), "両面パネル");
+  assert.equal(panelResultTitle(panel()), "玄関袖 片面パネル t=33mm");
+  assert.equal(
+    panelResultTitle(panel({ sides: "両面" })),
+    "玄関袖 両面パネル t=36mm",
+  );
 });

@@ -1,4 +1,4 @@
-import { panelMembers } from "./panel";
+import { panelFinishThickness, panelMembers } from "./panel";
 import { defaultAnswers, type QaAnswers } from "./qa";
 import type { Member } from "./model";
 
@@ -23,6 +23,10 @@ export function panelDisplayName(answers: QaAnswers): string {
 
 export function panelSidesLabel(answers: QaAnswers): string {
   return answers.sides === "両面" ? "両面パネル" : "片面パネル";
+}
+
+export function panelResultTitle(answers: QaAnswers): string {
+  return `${panelDisplayName(answers)} ${panelSidesLabel(answers)} t=${panelFinishThickness(answers)}mm`;
 }
 
 export function panelSummaryLine(answers: QaAnswers): string {

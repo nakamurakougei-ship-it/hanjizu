@@ -505,3 +505,13 @@ export function panelSei(answers: QaAnswers): number {
   if (isSheetKind(kind)) return answers.frameThickness ?? 15;
   return stickSei(kind, answers.boneUse ?? "成使い");
 }
+
+/** 枠の成＋面材。厚み使いの芯だけのときは面材を足さない。 */
+export function panelSkinCount(answers: QaAnswers): number {
+  if (isSheetKind(answers.frameKind) && answers.sheetUse !== "割き") return 0;
+  return answers.sides === "両面" ? 2 : 1;
+}
+
+export function panelFinishThickness(answers: QaAnswers): number {
+  return panelSei(answers) + PANEL_FACE_T_MM * panelSkinCount(answers);
+}

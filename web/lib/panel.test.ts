@@ -9,6 +9,7 @@ import {
   extraStilePlaneNote,
   extraStileSegLength,
   midRailCount,
+  panelFinishThickness,
   panelMembers,
 } from "./panel";
 import { packSticks, piecesFromMembers } from "./stickCut";
@@ -161,6 +162,8 @@ test("両面なら面材が表裏出る", () => {
   const members = panelMembers(panelAnswers({ sides: "両面" }));
   assert.ok(members.some((item) => item.name === "面材 表"));
   assert.ok(members.some((item) => item.name === "面材 裏"));
+  assert.equal(panelFinishThickness(panelAnswers()), 33);
+  assert.equal(panelFinishThickness(panelAnswers({ sides: "両面" })), 36);
 });
 
 test("パネルの質問は寸法のあと枠材、向き、それから横桟の長さ。横使いと縦長では出ない枝を聞かない", () => {
